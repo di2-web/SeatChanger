@@ -1,15 +1,21 @@
 import { useState } from 'react'
-import viteLogo from './assets/vite.svg'
+import changeSeat from './SeatLogic'
+import classmates from './classmates.json'
 import './App.css'
+
 
 function App() {
 
+  const classmatesArray: { number: number; name: string }[] = classmates
+
+  const [seats, setSeats] = useState<number[]>(changeSeat())
+
+
+
   return (
     <>
-      <div></div>
-      <a href="https://vitejs.dev" target="_blank">
-        <img src={viteLogo} className="logo" alt="Vite logo" />
-      </a>
+      <header>Seat Changer</header>
+
     </>
   )
 }
