@@ -1,8 +1,8 @@
 import classmates from './classmates.json'
 
-const classmatesArrayNumber: number[] = classmates.map((classmate) => classmate.number)
+let classmatesArray: { number: number; name: string }[] = classmates
 
-const shuffleArray = (array: number[]) => {
+const shuffleArray = (array: any[]) => {
   for (let i = array.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [array[i], array[j]] = [array[j], array[i]];
@@ -11,6 +11,6 @@ const shuffleArray = (array: number[]) => {
 }
 
 function changeSeat() {
-  return shuffleArray([...classmatesArrayNumber]);
+  return shuffleArray(classmatesArray);
 }
 export default changeSeat
