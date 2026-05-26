@@ -15,4 +15,5 @@ function shuffle(array: any[]) {
 function changeSeat() {
   return shuffle(classmates)
 }
+
 export default changeSeat

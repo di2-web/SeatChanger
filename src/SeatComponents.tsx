@@ -1,10 +1,14 @@
 function SeatCard(props: { number: number, name: string; }) {
-  return (
-    <div className="seat-card">
-      <p>{props.number}</p>
-      <p>{props.name}</p>
-    </div>
-  )
+  if (props.number == 0) {
+    return <div className="empty-seat"><p></p><p></p></div>
+  } else {
+    return (
+      <div className="seat-card">
+        <p>{props.number}</p>
+        <p>{props.name}</p>
+      </div>
+    )
+  }
 }
 
 function SeatMapping(props: { seatMap: { number: number, name: string; }[] }) {
@@ -15,17 +19,20 @@ function SeatMapping(props: { seatMap: { number: number, name: string; }[] }) {
     gap: "10px"
   }
 
-  if (props.seatMap.length == 40){
-    props.seatMap.splice(3, 0, { number: NaN, name: "" })
-    props.seatMap.splice(6, 0, { number: NaN, name: "" })
+  const map = [...props.seatMap]
 
-  return (
-    <div className="seat-map" style={seatMapStyle}>
-      {props.seatMap.map((seat) => (
-        <SeatCard number={seat.number} name={seat.name} key={seat.number} />
-      ))}
-    </div>
-  )} else {
+  if (props.seatMap.length == 40) {
+    map.splice(3, 0, { number: 0, name: "" })
+    map.splice(6, 0, { number: 0, name: "" })
+
+    return (
+      <div className="seat-map" style={seatMapStyle}>
+        {map.map((seat) => (
+          <SeatCard number={seat.number} name={seat.name} key={seat.number} />
+        ))}
+      </div>
+    )
+  } else {
     return (
       <div className="seat-map">
         <p>shuffle系のロジックに誤りがあります</p>
