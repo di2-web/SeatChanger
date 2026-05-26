@@ -1,4 +1,4 @@
-function SeatCard(props: { number: number; name: string; }) {
+function SeatCard(props: { number: number, name: string; }) {
   return (
     <div className="seat-card">
       <p>{props.number}</p>
@@ -7,13 +7,31 @@ function SeatCard(props: { number: number; name: string; }) {
   )
 }
 
-function SeatMap(props: { seatMap: { number: number; name: string; }[] }) {
+function SeatMapping(props: { seatMap: { number: number, name: string; }[] }) {
+
+  const seatMapStyle = {
+    display: "grid",
+    gridTemplateColumns: "repeat(7, 1fr)",
+    gap: "10px"
+  }
+
+  if (props.seatMap.length == 40){
+    props.seatMap.splice(3, 0, { number: NaN, name: "" })
+    props.seatMap.splice(6, 0, { number: NaN, name: "" })
 
   return (
-    <div className="seat-map">
+    <div className="seat-map" style={seatMapStyle}>
       {props.seatMap.map((seat) => (
-        <SeatCard key={seat.number} number={seat.number} name={seat.name} />
+        <SeatCard number={seat.number} name={seat.name} key={seat.number} />
       ))}
     </div>
-  )
+  )} else {
+    return (
+      <div className="seat-map">
+        <p>shuffle系のロジックに誤りがあります</p>
+      </div>
+    )
+  }
 }
+
+export default SeatMapping;
