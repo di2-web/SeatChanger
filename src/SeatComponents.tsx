@@ -7,7 +7,7 @@ const CardBorder = {
 const CardLongUnderLine = {
   margin: "auto auto",
   width: "80%",
-  height: "0.5px",
+  height: "0px",
   border: "1px solid #ccc"
 }
 
