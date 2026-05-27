@@ -7,8 +7,8 @@ const CardBorder = {
 const CardLongUnderLine = {
   margin: "auto auto",
   width: "80%",
-  height: "0px",
-  border: "3px solid #ccc"
+  height: "0.5px",
+  border: "1px solid #ccc"
 }
 
 function SeatCard(props: { number: number, name: string; }) {
