@@ -27,9 +27,13 @@ function SeatMapping(props: { seatMap: { number: number, name: string; }[] }) {
 
     return (
       <div className="seat-map" style={seatMapStyle}>
-        {map.map((seat) => (
-          <SeatCard number={seat.number} name={seat.name} key={seat.number} />
-        ))}
+        {map.map((seat, index) => {
+          const cardKey = seat.number === 0 ? `empty-${index}` : seat.number;
+
+          return (
+            <SeatCard number={seat.number} name={seat.name} key={cardKey} />
+          );
+        })}
       </div>
     )
   } else {
