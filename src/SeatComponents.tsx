@@ -1,9 +1,18 @@
+const CardBorder = {
+  border: "1px solid #ccc",
+  padding: "10px",
+  textAlign: "center" as const
+};
+
 function SeatCard(props: { number: number, name: string; }) {
   if (props.number == 0) {
-    return <div className="empty-seat"><p></p><p></p></div>
+    return <div style={CardBorder} className="seat-card empty-seat">
+      <p></p>
+      <p></p>
+    </div>
   } else {
     return (
-      <div className="seat-card">
+      <div style={CardBorder} className="seat-card">
         <p>{props.number}</p>
         <p>{props.name}</p>
       </div>

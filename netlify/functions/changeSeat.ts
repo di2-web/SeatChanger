@@ -11,7 +11,6 @@ function shuffle<T>(array: T[]): T[] {
   return newArray;
 }
 
-// 引数の (req, context) を完全に省略することで、ESLintのエラーを回避します
 export default async () => {
   const shuffledData = shuffle(classmates);
   return Response.json(shuffledData);
