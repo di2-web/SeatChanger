@@ -5,9 +5,9 @@ const CardBorder = {
 };
 
 const CardLongUnderLine = {
-  textDecoration: "underline",
-  textDecorationThickness: "2px",
-  textUnderlineOffset: "4px"
+  width: "80%",
+  height: "1px",
+  border: "1px solid #ccc"
 }
 
 function SeatCard(props: { number: number, name: string; }) {
@@ -19,7 +19,8 @@ function SeatCard(props: { number: number, name: string; }) {
   } else {
     return (
       <div style={CardBorder} className="seat-card">
-        <p style={CardLongUnderLine}>{props.number}</p>
+        <p>{props.number}</p>
+        <div style={CardLongUnderLine}></div>
         <p>{props.name}</p>
       </div>
     )
