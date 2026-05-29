@@ -19,7 +19,7 @@ const teacherSeatStyle = {
 }
 
 const teacherSeatEmptyStyle = {
-  padding: "10px",
+
 }
 
 function SeatCard(props: { number: number, name: string; }) {
