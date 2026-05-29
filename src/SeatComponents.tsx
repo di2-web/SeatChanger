@@ -15,7 +15,7 @@ const teacherSeatStyle = {
   border: "1px solid #ccc",
   margin: "0 auto 10px auto",
   textAlign: "center" as const,
-  padding: "10px",
+  padding: "0px",
 }
 
 function SeatCard(props: { number: number, name: string; }) {
@@ -51,7 +51,7 @@ function SeatMapping(props: { seatMap: { number: number, name: string; }[] }) {
 
     return (
       <>
-        <div className="teachers-seat" style={teacherSeatStyle}>教卓</div>
+        <div className="teachers-seat"><p style={teacherSeatStyle}>教卓</p></div>
         <div className="seat-map" style={seatMapStyle}>
           {map.map((seat, index) => {
             const cardKey = seat.number === 0 ? `empty-${index}` : seat.number;
