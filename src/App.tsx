@@ -44,33 +44,33 @@ function App() {
     }
   }, [])
 
-  // 端末サイズに依存しない、統一されたデスクトップ幅(1126px)の canvas を生成する共通関数
+  // 共通の高画質キャプチャ設定
   const getCanvas = async () => {
     if (!printAreaRef.current) return null
 
     return await html2canvas(printAreaRef.current, {
-      scale: 2,           // 高画質化（解像度2倍）
+      scale: 4,           // 画質向上のためスケールを「4」に引き上げます
       useCORS: true,      // 外部リソース解決用
-      windowWidth: 1126,  // キャプチャ時の仮想ウィンドウ幅をデスクトップ用（1126px）に固定
+      windowWidth: 1126,  // 仮想ブラウザの幅を1126pxに固定
+      logging: false,     // コンソールログを抑制
       onclone: (clonedDoc) => {
-        // クローンされたDOMの中から、キャプチャ対象の要素を見つけます
         const clonedElement = clonedDoc.getElementById('print-target')
         if (clonedElement) {
-          // モバイル表示であっても、強制的にデスクトップ時の幅に固定します
           clonedElement.style.width = '1126px'
           clonedElement.style.boxSizing = 'border-box'
 
-          // 【インク節約設定】
-          // ダークモード中に保存した際、真っ黒な背景で出力されないよう
-          // 保存用データのみ一時的にライトモード用のカラー設定に差し替えます
-          // （画面でダークモードのままキャプチャしたい場合は、以下の style.setProperty 群を削除してください）
+          // TypeScriptのエラーを回避するため、setPropertyを使用してCSSプロパティをセットします
+          clonedElement.style.setProperty('-webkit-font-smoothing', 'antialiased')
+          clonedElement.style.setProperty('-moz-osx-font-smoothing', 'grayscale')
+          clonedElement.style.setProperty('text-rendering', 'optimizeLegibility')
+
+          // 印刷用に出力コントラストを改善
           clonedElement.style.setProperty('--bg', '#ffffff')
-          clonedElement.style.setProperty('--text', '#6b6375')
-          clonedElement.style.setProperty('--text-h', '#08060d')
-          clonedElement.style.setProperty('--border', '#e5e4e7')
-          clonedElement.style.setProperty('--accent', '#aa3bff')
-          clonedElement.style.setProperty('--accent-bg', 'rgba(170, 59, 255, 0.1)')
-          clonedElement.style.setProperty('--accent-border', 'rgba(170, 59, 255, 0.5)')
+          clonedElement.style.setProperty('--text', '#1a1a1a')
+          clonedElement.style.setProperty('--text-h', '#000000')
+          clonedElement.style.setProperty('--border', '#a0a0a0')
+          clonedElement.style.setProperty('--accent', '#8213e8')
+          clonedElement.style.setProperty('--accent-bg', 'rgba(130, 19, 232, 0.05)')
         }
       }
     })
@@ -99,7 +99,6 @@ function App() {
 
       const imgData = canvas.toDataURL('image/png')
 
-      // A4横（Landscape）のドキュメントを作成
       const pdf = new jsPDF({
         orientation: 'landscape', // A4横向きに設定
         unit: 'mm',
@@ -109,15 +108,14 @@ function App() {
       const pdfWidth = pdf.internal.pageSize.getWidth()   // A4横幅: 297mm
       const pdfHeight = pdf.internal.pageSize.getHeight() // A4縦幅: 210mm
 
-      // 余白（マージン）の設定（左右15mm）
       const margin = 15
       const imgWidth = pdfWidth - margin * 2 // 267mm
       const imgHeight = (canvas.height * imgWidth) / canvas.width // アスペクト比を維持
 
-      // 画像の高さがA4用紙内に収まる場合、縦方向の中央にくるようにY位置を計算
       const imgY = (pdfHeight - imgHeight) / 2
 
-      pdf.addImage(imgData, 'PNG', margin, imgY, imgWidth, imgHeight)
+      // PDFへの埋め込み時の品質（FAST または SLOW など）を設定して劣化を防ぎます
+      pdf.addImage(imgData, 'PNG', margin, imgY, imgWidth, imgHeight, undefined, 'FAST')
       pdf.save('seat-map.pdf')
     } catch (error) {
       console.error("PDFの出力に失敗しました:", error)
@@ -138,7 +136,6 @@ function App() {
           <button onClick={downloadPDF}>PDFで保存(A4横)</button>
         </div>
 
-        {/* キャプチャ時に対象を特定できるよう、id="print-target" を付与します */}
         <div
           id="print-target"
           ref={printAreaRef}
