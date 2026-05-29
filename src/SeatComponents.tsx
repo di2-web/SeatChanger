@@ -18,10 +18,6 @@ const teacherSeatStyle = {
   padding: "10px",
 }
 
-const teacherSeatEmptyStyle = {
-
-}
-
 function SeatCard(props: { number: number, name: string; }) {
   if (props.number == 0) {
     return <div style={CardBorder} className="seat-card empty-seat">
