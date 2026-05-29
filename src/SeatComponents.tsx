@@ -18,6 +18,10 @@ const teacherSeatStyle = {
   padding: "0px",
 }
 
+const teacherSeatEmptyStyle = {
+  padding: "10px",
+}
+
 function SeatCard(props: { number: number, name: string; }) {
   if (props.number == 0) {
     return <div style={CardBorder} className="seat-card empty-seat">
@@ -51,7 +55,11 @@ function SeatMapping(props: { seatMap: { number: number, name: string; }[] }) {
 
     return (
       <>
-        <div className="teachers-seat"><p style={teacherSeatStyle}>教卓</p></div>
+        <div className="teachers-seat">
+          <p style={teacherSeatEmptyStyle} /><p style={teacherSeatEmptyStyle} /><p style={teacherSeatEmptyStyle} />
+          <p style={teacherSeatStyle}>教卓</p>
+          <p style={teacherSeatEmptyStyle} /><p style={teacherSeatEmptyStyle} /><p style={teacherSeatEmptyStyle} />
+        </div>
         <div className="seat-map" style={seatMapStyle}>
           {map.map((seat, index) => {
             const cardKey = seat.number === 0 ? `empty-${index}` : seat.number;
