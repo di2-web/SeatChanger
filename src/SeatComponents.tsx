@@ -16,7 +16,8 @@ const teacherSeatStyle = {
   margin: "0 auto 10px auto",
   textAlign: "center" as const,
   padding: "10px",
-}
+  width: "150px",
+};
 
 function SeatCard(props: { number: number, name: string; }) {
   if (props.number == 0) {
