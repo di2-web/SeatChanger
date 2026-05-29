@@ -6,9 +6,16 @@ const CardBorder = {
 
 const CardLongUnderLine = {
   margin: "auto auto",
-  width: "80%",
+  width: "100%",
   height: "0px",
-  border: "1px solid #ccc"
+  borderBottom: "1px solid #ccc"
+}
+
+const teacherSeatStyle = {
+  border: "1px solid #ccc",
+  margin: "0 auto 10px auto",
+  textAlign: "center" as const,
+  padding: "10px",
 }
 
 function SeatCard(props: { number: number, name: string; }) {
@@ -43,15 +50,18 @@ function SeatMapping(props: { seatMap: { number: number, name: string; }[] }) {
     map.splice(6, 0, { number: 0, name: "" })
 
     return (
-      <div className="seat-map" style={seatMapStyle}>
-        {map.map((seat, index) => {
-          const cardKey = seat.number === 0 ? `empty-${index}` : seat.number;
+      <>
+        <div className="teachers-seat" style={teacherSeatStyle}>教卓</div>
+        <div className="seat-map" style={seatMapStyle}>
+          {map.map((seat, index) => {
+            const cardKey = seat.number === 0 ? `empty-${index}` : seat.number;
 
-          return (
-            <SeatCard number={seat.number} name={seat.name} key={cardKey} />
-          );
-        })}
-      </div>
+            return (
+              <SeatCard number={seat.number} name={seat.name} key={cardKey} />
+            );
+          })}
+        </div>
+      </>
     )
   } else {
     return (
