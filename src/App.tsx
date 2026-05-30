@@ -5,10 +5,10 @@ import jsPDF from 'jspdf'
 import './App.css'
 
 function App() {
-  const [seatMap, setSeatMap] = useState<{ number: number, name: string }[]>([])
+  // 型定義に ruby: string を追加
+  const [seatMap, setSeatMap] = useState<{ number: number, name: string, ruby: string }[]>([])
   const [loading, setLoading] = useState(true)
 
-  // 印刷・保存対象のDOM要素を参照するためのRef
   const printAreaRef = useRef<HTMLDivElement>(null)
 
   const handleShuffle = async () => {
@@ -44,27 +44,24 @@ function App() {
     }
   }, [])
 
-  // 共通の高画質キャプチャ設定
   const getCanvas = async () => {
     if (!printAreaRef.current) return null
 
     return await html2canvas(printAreaRef.current, {
-      scale: 4,           // 画質向上のためスケールを「4」に引き上げます
-      useCORS: true,      // 外部リソース解決用
-      windowWidth: 1126,  // 仮想ブラウザの幅を1126pxに固定
-      logging: false,     // コンソールログを抑制
+      scale: 4,
+      useCORS: true,
+      windowWidth: 1126,
+      logging: false,
       onclone: (clonedDoc) => {
         const clonedElement = clonedDoc.getElementById('print-target')
         if (clonedElement) {
           clonedElement.style.width = '1126px'
           clonedElement.style.boxSizing = 'border-box'
 
-          // TypeScriptのエラーを回避するため、setPropertyを使用してCSSプロパティをセットします
           clonedElement.style.setProperty('-webkit-font-smoothing', 'antialiased')
           clonedElement.style.setProperty('-moz-osx-font-smoothing', 'grayscale')
           clonedElement.style.setProperty('text-rendering', 'optimizeLegibility')
 
-          // 印刷用に出力コントラストを改善
           clonedElement.style.setProperty('--bg', '#ffffff')
           clonedElement.style.setProperty('--text', '#1a1a1a')
           clonedElement.style.setProperty('--text-h', '#000000')
@@ -76,7 +73,6 @@ function App() {
     })
   }
 
-  // 1. PNGとして画像ダウンロードする関数
   const downloadPNG = async () => {
     try {
       const canvas = await getCanvas()
@@ -91,7 +87,6 @@ function App() {
     }
   }
 
-  // 2. A4横サイズのPDFとしてダウンロードする関数
   const downloadPDF = async () => {
     try {
       const canvas = await getCanvas()
@@ -100,21 +95,20 @@ function App() {
       const imgData = canvas.toDataURL('image/png')
 
       const pdf = new jsPDF({
-        orientation: 'landscape', // A4横向きに設定
+        orientation: 'landscape',
         unit: 'mm',
         format: 'a4',
       })
 
-      const pdfWidth = pdf.internal.pageSize.getWidth()   // A4横幅: 297mm
-      const pdfHeight = pdf.internal.pageSize.getHeight() // A4縦幅: 210mm
+      const pdfWidth = pdf.internal.pageSize.getWidth()
+      const pdfHeight = pdf.internal.pageSize.getHeight()
 
       const margin = 15
-      const imgWidth = pdfWidth - margin * 2 // 267mm
-      const imgHeight = (canvas.height * imgWidth) / canvas.width // アスペクト比を維持
+      const imgWidth = pdfWidth - margin * 2
+      const imgHeight = (canvas.height * imgWidth) / canvas.width
 
       const imgY = (pdfHeight - imgHeight) / 2
 
-      // PDFへの埋め込み時の品質（FAST または SLOW など）を設定して劣化を防ぎます
       pdf.addImage(imgData, 'PNG', margin, imgY, imgWidth, imgHeight, undefined, 'FAST')
       pdf.save('seat-map.pdf')
     } catch (error) {
