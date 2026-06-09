@@ -21,7 +21,7 @@ const teacherSeatStyle = {
 
 // 引数に ruby: string を追加
 function SeatCard(props: { number: number; name: string; ruby: string }) {
-  if (props.number == 0) {
+  if (props.number === 0) {
     return (
       <div style={CardBorder} className="seat-card empty-seat">
         <p></p>
@@ -58,7 +58,7 @@ function SeatMapping(props: { seatMap: { number: number; name: string; ruby: str
 
   const map = [...props.seatMap]
 
-  if (props.seatMap.length == 40) {
+  if (props.seatMap.length === 40) {
     // 挿入する空白座席データにも ruby: "" を指定して型を合わせます
     map.splice(3, 0, { number: 0, name: "", ruby: "" })
     map.splice(6, 0, { number: 0, name: "", ruby: "" })
