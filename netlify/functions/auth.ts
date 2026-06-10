@@ -20,7 +20,7 @@ function generateToken(): string {
 export async function verifyToken(token: string): Promise<boolean> {
   if (!token) return false;
 
-  const store = getStore("seat-settings");
+  const store = getStore({ name: "seat-settings", consistency: "strong" });
   try {
     const tokens = await store.get("active-tokens", { type: "json" }) as Record<string, number> | null;
     if (!tokens) return false;
@@ -58,7 +58,7 @@ export default async (request: Request) => {
 
     // Generate and store token
     const token = generateToken();
-    const store = getStore("seat-settings");
+    const store = getStore({ name: "seat-settings", consistency: "strong" });
 
     let tokens: Record<string, number> = {};
     try {
