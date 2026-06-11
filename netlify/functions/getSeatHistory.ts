@@ -1,6 +1,5 @@
 import { getStore } from "@netlify/blobs";
 
-// 保存されている履歴オブジェクトの型を明確に定義します
 interface SavedHistoryEntry {
   seatMap: { number: number; name: string; ruby: string }[];
   createdAt: string;
@@ -8,24 +7,20 @@ interface SavedHistoryEntry {
 
 export default async () => {
   try {
-    const historyStore = getStore("seat-history");
+    // Strong consistency ensures newly saved entries are visible immediately
+    const historyStore = getStore({ name: "seat-history", consistency: "strong" });
     const allKeys = await historyStore.list();
 
-    const entries = [];
-    // Sort keys descending (newest first)
     const sortedKeys = allKeys.blobs
       .map(b => b.key)
       .sort()
       .reverse();
 
+    const entries = [];
     for (const key of sortedKeys) {
-      // Record<string, any> ではなく、上記で宣言したインターフェースでキャストします
       const data = await historyStore.get(key, { type: "json" }) as SavedHistoryEntry | null;
       if (data) {
-        entries.push({
-          key,
-          ...data,
-        });
+        entries.push({ key, ...data });
       }
     }
 

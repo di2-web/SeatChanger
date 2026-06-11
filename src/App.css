@@ -592,3 +592,31 @@ button, .btn {
     transform: scale(0.5);
   }
 }
+
+/* ===========================
+   Seat Display (scroll on mobile)
+   =========================== */
+
+.seat-scroll-container {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Swap mode status bar */
+.swap-status {
+  text-align: center;
+  font-size: 13px;
+  color: var(--accent);
+  font-weight: 500;
+  padding: 6px 16px 0;
+  margin-bottom: -6px;
+}
+
+@media (max-width: 700px) {
+  #print-target {
+    /* Keep natural width so seats render correctly; container scrolls */
+    min-width: 560px;
+    padding: 16px;
+    font-size: 13px;
+  }
+}

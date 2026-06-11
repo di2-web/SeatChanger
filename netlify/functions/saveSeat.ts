@@ -6,7 +6,6 @@ export default async (request: Request) => {
     return new Response("Method not allowed", { status: 405 });
   }
 
-  // Verify auth
   const authHeader = request.headers.get("Authorization") || "";
   const token = authHeader.replace("Bearer ", "");
 
@@ -31,15 +30,14 @@ export default async (request: Request) => {
     const now = new Date();
     const timestamp = now.toISOString();
 
-    // Save as current seat arrangement
-    const currentStore = getStore("seat-current");
+    // Use strong consistency so reads immediately after write see fresh data
+    const currentStore = getStore({ name: "seat-current", consistency: "strong" });
     await currentStore.set("current", JSON.stringify({
       seatMap,
       updatedAt: timestamp,
     }));
 
-    // Add to history
-    const historyStore = getStore("seat-history");
+    const historyStore = getStore({ name: "seat-history", consistency: "strong" });
     const historyKey = `${now.getTime()}`;
     await historyStore.set(historyKey, JSON.stringify({
       seatMap,
@@ -50,10 +48,10 @@ export default async (request: Request) => {
     // Limit history to 100 entries
     const allKeys = await historyStore.list();
     if (allKeys.blobs.length > 100) {
-      const sortedKeys = allKeys.blobs
+      const keysToDelete = allKeys.blobs
         .map(b => b.key)
-        .sort();
-      const keysToDelete = sortedKeys.slice(0, sortedKeys.length - 100);
+        .sort()
+        .slice(0, allKeys.blobs.length - 100);
       for (const key of keysToDelete) {
         await historyStore.delete(key);
       }

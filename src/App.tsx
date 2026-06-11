@@ -8,25 +8,36 @@ import { ToastContainer, showToast } from './Toast'
 import html2canvas from 'html2canvas'
 import './App.css'
 
-function SeatPage() {
-  const [seatMap, setSeatMap] = useState<{ number: number, name: string, ruby: string }[]>([])
+interface SeatEntry {
+  number: number
+  name: string
+  ruby: string
+}
+
+interface SeatPageProps {
+  authToken: string | null
+  onAuthChange: (token: string | null) => void
+}
+
+function SeatPage({ authToken, onAuthChange }: SeatPageProps) {
+  const [seatMap, setSeatMap] = useState<SeatEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [shuffling, setShuffling] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [authToken, setAuthToken] = useState<string | null>(
-    () => localStorage.getItem('auth_token')
-  )
   const [showAuthModal, setShowAuthModal] = useState(false)
   const [pendingAction, setPendingAction] = useState<string | null>(null)
 
+  // Swap mode
+  const [swapMode, setSwapMode] = useState(false)
+  const [selectedSeatIdx, setSelectedSeatIdx] = useState<number | null>(null)
+
   const printAreaRef = useRef<HTMLDivElement>(null)
 
-  // Fetch initial data (no auth required for viewing)
+  // Fetch latest seat from history on mount
   useEffect(() => {
     let ignore = false
     const fetchInitialData = async () => {
       try {
-        // Try to load current saved seat from database
         const response = await fetch('/.netlify/functions/getSeatHistory')
         if (response.ok) {
           const history = await response.json()
@@ -36,21 +47,14 @@ function SeatPage() {
             return
           }
         }
-        // Fallback: no history, show empty state
-        if (!ignore) {
-          setLoading(false)
-        }
+        if (!ignore) setLoading(false)
       } catch (error) {
-        console.error("初回データの取得に失敗しました:", error)
-        if (!ignore) {
-          setLoading(false)
-        }
+        console.error('初回データの取得に失敗しました:', error)
+        if (!ignore) setLoading(false)
       }
     }
     fetchInitialData()
-    return () => {
-      ignore = true
-    }
+    return () => { ignore = true }
   }, [])
 
   const requireAuth = useCallback((action: string) => {
@@ -62,39 +66,33 @@ function SeatPage() {
     setShuffling(true)
     try {
       const response = await fetch('/.netlify/functions/changeSeat', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
+        headers: { 'Authorization': `Bearer ${token}` },
       })
-
       if (response.status === 401) {
         localStorage.removeItem('auth_token')
-        setAuthToken(null)
+        onAuthChange(null)
         requireAuth('shuffle')
         return
       }
-
-      if (!response.ok) {
-        throw new Error(`HTTP error: ${response.status}`)
-      }
-
+      if (!response.ok) throw new Error(`HTTP error: ${response.status}`)
       const data = await response.json()
       setSeatMap(data)
+      setSwapMode(false)
+      setSelectedSeatIdx(null)
       showToast('席替えを実行しました', 'success')
     } catch (error) {
-      console.error("席替えデータの取得に失敗しました:", error)
+      console.error('席替えデータの取得に失敗しました:', error)
       showToast('席替えに失敗しました', 'error')
     } finally {
       setShuffling(false)
     }
   }
 
-  const doSave = async (token: string) => {
-    if (seatMap.length === 0) {
+  const doSave = async (token: string, currentSeatMap: SeatEntry[]) => {
+    if (currentSeatMap.length === 0) {
       showToast('保存する座席データがありません', 'error')
       return
     }
-
     setSaving(true)
     try {
       const response = await fetch('/.netlify/functions/saveSeat', {
@@ -103,133 +101,116 @@ function SeatPage() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
         },
-        body: JSON.stringify({ seatMap }),
+        body: JSON.stringify({ seatMap: currentSeatMap }),
       })
-
       if (response.status === 401) {
         localStorage.removeItem('auth_token')
-        setAuthToken(null)
+        onAuthChange(null)
         requireAuth('save')
         return
       }
-
-      if (!response.ok) {
-        throw new Error(`HTTP error: ${response.status}`)
-      }
-
-      showToast('座席配置を保存しました', 'success')
+      if (!response.ok) throw new Error(`HTTP error: ${response.status}`)
+      showToast('履歴に保存しました', 'success')
     } catch (error) {
-      console.error("保存に失敗しました:", error)
+      console.error('保存に失敗しました:', error)
       showToast('保存に失敗しました', 'error')
     } finally {
       setSaving(false)
     }
   }
 
+  // seatMap is explicitly passed to doSave to avoid stale closure issues
   const handleAuthenticated = useCallback((token: string) => {
-    setAuthToken(token)
+    onAuthChange(token)
     setShowAuthModal(false)
-    // Execute pending action
     if (pendingAction === 'shuffle') {
       doShuffle(token)
     } else if (pendingAction === 'save') {
-      doSave(token)
+      doSave(token, seatMap)
     }
     setPendingAction(null)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingAction, seatMap])
+  // doShuffle is stable (no closure over seatMap), doSave receives seatMap as arg
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingAction, seatMap, onAuthChange])
 
   const handleShuffle = () => {
     if (shuffling) return
-    if (!authToken) {
-      requireAuth('shuffle')
-      return
-    }
+    if (!authToken) { requireAuth('shuffle'); return }
     doShuffle(authToken)
   }
 
   const handleSave = () => {
     if (saving) return
-    if (!authToken) {
-      requireAuth('save')
-      return
-    }
-    doSave(authToken)
+    if (!authToken) { requireAuth('save'); return }
+    doSave(authToken, seatMap)
   }
 
+  // Swap mode handlers
+  const toggleSwapMode = () => {
+    setSwapMode(prev => !prev)
+    setSelectedSeatIdx(null)
+  }
+
+  const handleSeatClick = useCallback((idx: number) => {
+    if (selectedSeatIdx === null) {
+      setSelectedSeatIdx(idx)
+    } else if (selectedSeatIdx === idx) {
+      setSelectedSeatIdx(null)
+    } else {
+      setSeatMap(prev => {
+        const next = [...prev];
+        [next[selectedSeatIdx], next[idx]] = [next[idx], next[selectedSeatIdx]]
+        return next
+      })
+      setSelectedSeatIdx(null)
+      showToast('席を交換しました', 'success')
+    }
+  }, [selectedSeatIdx])
+
+  // Build canvas at full 1126px landscape width for share/export
   const getCanvas = async () => {
     if (!printAreaRef.current) return null
-
     return await html2canvas(printAreaRef.current, {
       scale: 4,
       useCORS: true,
       windowWidth: 1126,
       logging: false,
       onclone: (clonedDoc) => {
-        const clonedElement = clonedDoc.getElementById('print-target')
-        if (clonedElement) {
-          clonedElement.style.width = '1126px'
-          clonedElement.style.boxSizing = 'border-box'
-
-          clonedElement.style.setProperty('-webkit-font-smoothing', 'antialiased')
-          clonedElement.style.setProperty('-moz-osx-font-smoothing', 'grayscale')
-          clonedElement.style.setProperty('text-rendering', 'optimizeLegibility')
-
-          clonedElement.style.setProperty('--bg', '#ffffff')
-          clonedElement.style.setProperty('--text', '#1a1a1a')
-          clonedElement.style.setProperty('--text-h', '#000000')
-          clonedElement.style.setProperty('--border', '#a0a0a0')
-          clonedElement.style.setProperty('--accent', '#8213e8')
-          clonedElement.style.setProperty('--accent-bg', 'rgba(130, 19, 232, 0.05)')
+        const el = clonedDoc.getElementById('print-target')
+        if (el) {
+          el.style.width = '1126px'
+          el.style.boxSizing = 'border-box'
+          el.style.setProperty('-webkit-font-smoothing', 'antialiased')
+          el.style.setProperty('text-rendering', 'optimizeLegibility')
+          el.style.setProperty('--bg', '#ffffff')
+          el.style.setProperty('--text', '#1a1a1a')
+          el.style.setProperty('--text-h', '#000000')
+          el.style.setProperty('--border', '#a0a0a0')
+          el.style.setProperty('--accent', '#8213e8')
+          el.style.setProperty('--accent-bg', 'rgba(130, 19, 232, 0.05)')
         }
       }
     })
   }
 
-  const downloadPNG = async () => {
-    try {
-      const canvas = await getCanvas()
-      if (!canvas) {
-        showToast('画像の生成に失敗しました', 'error')
-        return
-      }
-
-      const link = document.createElement('a')
-      link.href = canvas.toDataURL('image/png')
-      link.download = 'seat-map.png'
-      link.click()
-      showToast('PNGをダウンロードしました', 'success')
-    } catch (error) {
-      console.error("PNGの出力に失敗しました:", error)
-      showToast('PNGの出力に失敗しました', 'error')
-    }
-  }
-
   const shareImage = async () => {
+    // Reset swap UI before capturing
+    setSwapMode(false)
+    setSelectedSeatIdx(null)
+    // Small delay to let React re-render without selection state
+    await new Promise(r => setTimeout(r, 50))
+
     try {
       const canvas = await getCanvas()
-      if (!canvas) {
-        showToast('画像の生成に失敗しました', 'error')
-        return
-      }
+      if (!canvas) { showToast('画像の生成に失敗しました', 'error'); return }
 
-      // Try Web Share API first
       if (navigator.share && navigator.canShare) {
-        const blob = await new Promise<Blob | null>((resolve) =>
+        const blob = await new Promise<Blob | null>(resolve =>
           canvas.toBlob(resolve, 'image/png')
         )
-        if (!blob) {
-          showToast('画像の生成に失敗しました', 'error')
-          return
-        }
-
+        if (!blob) { showToast('画像の生成に失敗しました', 'error'); return }
         const file = new File([blob], 'seat-map.png', { type: 'image/png' })
-        const shareData = {
-          title: '座席表',
-          text: '席替え結果',
-          files: [file],
-        }
-
+        const shareData = { title: '座席表', text: '席替え結果', files: [file] }
         if (navigator.canShare(shareData)) {
           await navigator.share(shareData)
           showToast('共有しました', 'success')
@@ -237,20 +218,15 @@ function SeatPage() {
         }
       }
 
-      // Fallback: Download image and open LINE share
+      // Fallback: download
       const link = document.createElement('a')
       link.href = canvas.toDataURL('image/png')
       link.download = 'seat-map.png'
       link.click()
-
-      // Open LINE share (text only, user attaches downloaded image)
-      const lineUrl = `https://line.me/R/share?text=${encodeURIComponent('席替え結果を共有します！画像を添付してください。')}`
-      window.open(lineUrl, '_blank')
-      showToast('画像をダウンロードしました。LINEで共有してください。', 'info')
+      showToast('画像をダウンロードしました', 'info')
     } catch (error) {
-      // User may have cancelled the share dialog
       if (error instanceof Error && error.name !== 'AbortError') {
-        console.error("共有に失敗しました:", error)
+        console.error('共有に失敗しました:', error)
         showToast('共有に失敗しました', 'error')
       }
     }
@@ -276,21 +252,21 @@ function SeatPage() {
             {shuffling ? '処理中...' : '席替え'}
           </button>
           <button
-            className="btn btn-secondary"
+            className={`btn ${swapMode ? 'btn-secondary' : 'btn-outline'}`}
+            onClick={toggleSwapMode}
+            disabled={seatMap.length === 0}
+          >
+            {swapMode ? '交換モード終了' : '手動交換'}
+          </button>
+          <button
+            className="btn btn-outline"
             onClick={handleSave}
             disabled={saving || seatMap.length === 0}
           >
-            {saving ? '保存中...' : '保存'}
+            {saving ? '保存中...' : '履歴に保存'}
           </button>
         </div>
         <div className="action-group">
-          <button
-            className="btn btn-outline"
-            onClick={downloadPNG}
-            disabled={seatMap.length === 0}
-          >
-            PNG
-          </button>
           <button
             className="btn btn-outline"
             onClick={shareImage}
@@ -301,20 +277,33 @@ function SeatPage() {
         </div>
       </div>
 
+      {swapMode && (
+        <div className="swap-status">
+          {selectedSeatIdx !== null
+            ? '交換相手の席をクリックしてください'
+            : '交換したい席をクリックしてください'}
+        </div>
+      )}
+
       {seatMap.length > 0 ? (
-        <div
-          id="print-target"
-          ref={printAreaRef}
-          style={{
-            background: 'var(--bg)',
-            padding: '32px',
-            borderRadius: '8px',
-            color: 'var(--text-h)',
-            maxWidth: '100%',
-            boxSizing: 'border-box'
-          }}
-        >
-          <SeatMapping seatMap={seatMap} />
+        <div className="seat-scroll-container">
+          <div
+            id="print-target"
+            ref={printAreaRef}
+            style={{
+              background: 'var(--bg)',
+              padding: '32px',
+              color: 'var(--text-h)',
+              boxSizing: 'border-box',
+            }}
+          >
+            <SeatMapping
+              seatMap={seatMap}
+              onSeatClick={swapMode ? handleSeatClick : undefined}
+              selectedSeatIdx={selectedSeatIdx}
+              swapMode={swapMode}
+            />
+          </div>
         </div>
       ) : (
         <div className="empty-state">
@@ -336,24 +325,28 @@ function SeatPage() {
 }
 
 function App() {
+  // Single source of truth for auth state
   const [authToken, setAuthToken] = useState<string | null>(
     () => localStorage.getItem('auth_token')
   )
   const [showAuthModal, setShowAuthModal] = useState(false)
 
-  const handleRequireAuth = () => {
-    setShowAuthModal(true)
-  }
-
-  const handleAuthenticated = (token: string) => {
+  const handleAuthChange = useCallback((token: string | null) => {
     setAuthToken(token)
-    setShowAuthModal(false)
-  }
+    // localStorage is managed by AuthModal (on login) and here (on logout/401)
+    if (!token) localStorage.removeItem('auth_token')
+  }, [])
 
   const handleLogout = () => {
     localStorage.removeItem('auth_token')
     setAuthToken(null)
     showToast('ログアウトしました', 'info')
+  }
+
+  // Header login button authenticated: just update state, no pending action
+  const handleHeaderAuthenticated = (token: string) => {
+    setAuthToken(token)
+    setShowAuthModal(false)
   }
 
   return (
@@ -377,7 +370,7 @@ function App() {
               ログアウト
             </button>
           ) : (
-            <button className="btn btn-ghost" onClick={handleRequireAuth}>
+            <button className="btn btn-ghost" onClick={() => setShowAuthModal(true)}>
               ログイン
             </button>
           )}
@@ -386,13 +379,16 @@ function App() {
 
       <main>
         <Routes>
-          <Route path="/" element={<SeatPage />} />
+          <Route
+            path="/"
+            element={<SeatPage authToken={authToken} onAuthChange={handleAuthChange} />}
+          />
           <Route
             path="/history"
             element={
               <HistoryPage
                 authToken={authToken}
-                onRequireAuth={handleRequireAuth}
+                onRequireAuth={() => setShowAuthModal(true)}
               />
             }
           />
@@ -401,17 +397,18 @@ function App() {
             element={
               <SettingsPage
                 authToken={authToken}
-                onRequireAuth={handleRequireAuth}
+                onRequireAuth={() => setShowAuthModal(true)}
               />
             }
           />
         </Routes>
       </main>
 
+      {/* Header-level auth modal (no pending action) */}
       <AuthModal
         isOpen={showAuthModal}
         onClose={() => setShowAuthModal(false)}
-        onAuthenticated={handleAuthenticated}
+        onAuthenticated={handleHeaderAuthenticated}
       />
       <ToastContainer />
     </BrowserRouter>
