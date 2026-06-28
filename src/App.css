@@ -507,12 +507,83 @@ button, .btn {
    Seat card styles
    =========================== */
 
+.seat-map-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 10px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
 .seat-card {
-  transition: box-shadow 0.15s;
+  border: 1px solid #ccc;
+  padding: 10px;
+  text-align: center;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  box-sizing: border-box;
+  min-height: 80px;
+  transition: box-shadow 0.15s, border-color 0.15s, background-color 0.15s;
 
   &:hover:not(.empty-seat) {
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
   }
+}
+
+.seat-card.empty-seat {
+  border: 1px solid transparent !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  pointer-events: none;
+}
+
+.seat-number-text {
+  margin: 0 0 4px 0;
+  font-size: 14px;
+  color: var(--text);
+  font-weight: 600;
+}
+
+.seat-divider {
+  margin: 0 auto;
+  width: 100%;
+  height: 0px;
+  border-bottom: 1px solid #ccc;
+}
+
+.seat-name-container {
+  margin: 8px 0 0 0;
+  line-height: 1.2;
+  font-size: 16px;
+  color: var(--text-h);
+  font-weight: 500;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+.seat-ruby-text {
+  font-size: 10px;
+  color: gray;
+  letter-spacing: 0.5px;
+}
+
+.teacher-seat-box {
+  border: 1px solid #ccc;
+  margin: 0 auto 16px auto;
+  text-align: center;
+  padding: 10px;
+  width: 150px;
+  background: var(--bg);
+  font-weight: 500;
+}
+
+.seat-map-error {
+  text-align: center;
+  padding: 20px;
+  color: #dc2626;
+  font-weight: 500;
 }
 
 /* ===========================
@@ -591,15 +662,49 @@ button, .btn {
   .history-seat-preview {
     transform: scale(0.5);
   }
-}
 
-/* ===========================
-   Seat Display (scroll on mobile)
-   =========================== */
+  /* スマホでのはみ出しを防ぎ、横スクロールなしで1画面に収める */
+  .seat-scroll-container {
+    overflow-x: visible;
+  }
 
-.seat-scroll-container {
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
+  #print-target {
+    padding: 12px 8px !important;
+    min-width: 0 !important;
+  }
+
+  .seat-map-grid {
+    gap: 4px; /* 隙間を詰めて余白を節約 */
+  }
+
+  .seat-card {
+    padding: 6px 2px;
+    min-height: 52px;
+    border-radius: 4px;
+  }
+
+  .seat-number-text {
+    font-size: 9px;
+    margin: 0 0 2px 0;
+  }
+
+  .seat-name-container {
+    margin: 2px 0 0 0;
+    font-size: 11px;
+    line-height: 1.1;
+  }
+
+  .seat-ruby-text {
+    font-size: 7px;
+    letter-spacing: 0px;
+  }
+
+  .teacher-seat-box {
+    width: 100px;
+    padding: 6px;
+    font-size: 12px;
+    margin-bottom: 12px;
+  }
 }
 
 /* Swap mode status bar */
@@ -610,13 +715,4 @@ button, .btn {
   font-weight: 500;
   padding: 6px 16px 0;
   margin-bottom: -6px;
-}
-
-@media (max-width: 700px) {
-  #print-target {
-    /* Keep natural width so seats render correctly; container scrolls */
-    min-width: 560px;
-    padding: 16px;
-    font-size: 13px;
-  }
 }

@@ -1,25 +1,3 @@
-const CardBorder = {
-  border: "1px solid #ccc",
-  padding: "10px",
-  textAlign: "center" as const,
-  transition: "border-color 0.15s, background-color 0.15s",
-};
-
-const CardLongUnderLine = {
-  margin: "auto auto",
-  width: "100%",
-  height: "0px",
-  borderBottom: "1px solid #ccc",
-};
-
-const teacherSeatStyle = {
-  border: "1px solid #ccc",
-  margin: "0 auto 10px auto",
-  textAlign: "center" as const,
-  padding: "10px",
-  width: "150px",
-};
-
 interface SeatCardProps {
   number: number;
   name: string;
@@ -41,7 +19,7 @@ function SeatCard({
 }: SeatCardProps) {
   if (number === 0) {
     return (
-      <div style={CardBorder} className="seat-card empty-seat">
+      <div className="seat-card empty-seat">
         <p></p>
         <p></p>
       </div>
@@ -55,22 +33,21 @@ function SeatCard({
   };
 
   const dynamicStyle = {
-    ...CardBorder,
     cursor: swapMode ? "pointer" : "default",
     backgroundColor: isSelected ? "var(--accent-bg)" : undefined,
-    borderColor: isSelected ? "var(--accent)" : "#ccc",
+    borderColor: isSelected ? "var(--accent)" : undefined,
     outline: isSelected ? "2px solid var(--accent)" : "none",
     outlineOffset: "-1px",
   };
 
   return (
     <div style={dynamicStyle} className="seat-card" onClick={handleClick}>
-      <p>{number}</p>
-      <div style={CardLongUnderLine}></div>
-      <p style={{ margin: "8px 0 0 0", lineHeight: "1.2" }}>
+      <p className="seat-number-text">{number}</p>
+      <div className="seat-divider"></div>
+      <p className="seat-name-container">
         <ruby style={{ rubyPosition: "over" }}>
           {name}
-          <rt style={{ fontSize: "10px", color: "gray", letterSpacing: "0.5px" }}>
+          <rt className="seat-ruby-text">
             {ruby}
           </rt>
         </ruby>
@@ -92,32 +69,26 @@ function SeatMapping({
   selectedSeatIdx,
   swapMode = false,
 }: SeatMappingProps) {
-  const seatMapStyle = {
-    display: "grid",
-    gridTemplateColumns: "repeat(7, 1fr)",
-    gap: "10px",
-  };
-
   if (seatMap.length !== 40) {
     return (
-      <div className="seat-map">
+      <div className="seat-map-error">
         <p>shuffle系のロジックに誤りがあります</p>
       </div>
     );
   }
 
-  // Annotate each seat with its original seatMap index
+  // 各席に元のインデックスを付与
   const annotated = seatMap.map((seat, idx) => ({ ...seat, originalIdx: idx }));
-  // Insert display-only empty seats
+  // 表示用の空席を特定位置に挿入
   annotated.splice(3, 0, { number: 0, name: "", ruby: "", originalIdx: -1 });
   annotated.splice(6, 0, { number: 0, name: "", ruby: "", originalIdx: -1 });
 
   return (
     <>
       <div className="teachers-seat">
-        <p style={teacherSeatStyle}>教卓</p>
+        <p className="teacher-seat-box">教卓</p>
       </div>
-      <div className="seat-map" style={seatMapStyle}>
+      <div className="seat-map-grid">
         {annotated.map((seat, index) => {
           const cardKey = seat.number === 0 ? `empty-${index}` : seat.number;
           return (
