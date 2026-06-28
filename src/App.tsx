@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, NavLink, Navigate } from 'react-router-dom'
 import SeatMapping from './SeatComponents'
 import AuthModal from './AuthModal'
 import HistoryPage from './HistoryPage'
@@ -243,38 +243,53 @@ function SeatPage({ authToken, onAuthChange }: SeatPageProps) {
   return (
     <>
       <div className="action-bar">
-        <div className="action-group">
-          <button
-            className="btn btn-primary"
-            onClick={handleShuffle}
-            disabled={shuffling}
-          >
-            {shuffling ? '処理中...' : '席替え'}
-          </button>
-          <button
-            className={`btn ${swapMode ? 'btn-secondary' : 'btn-outline'}`}
-            onClick={toggleSwapMode}
-            disabled={seatMap.length === 0}
-          >
-            {swapMode ? '交換モード終了' : '手動交換'}
-          </button>
-          <button
-            className="btn btn-outline"
-            onClick={handleSave}
-            disabled={saving || seatMap.length === 0}
-          >
-            {saving ? '保存中...' : '履歴に保存'}
-          </button>
-        </div>
-        <div className="action-group">
-          <button
-            className="btn btn-outline"
-            onClick={shareImage}
-            disabled={seatMap.length === 0}
-          >
-            共有
-          </button>
-        </div>
+        {authToken ? (
+          <>
+            <div className="action-group">
+              <button
+                className="btn btn-primary"
+                onClick={handleShuffle}
+                disabled={shuffling}
+              >
+                {shuffling ? '処理中...' : '席替え'}
+              </button>
+              <button
+                className={`btn ${swapMode ? 'btn-secondary' : 'btn-outline'}`}
+                onClick={toggleSwapMode}
+                disabled={seatMap.length === 0}
+              >
+                {swapMode ? '交換モード終了' : '手動交換'}
+              </button>
+              <button
+                className="btn btn-outline"
+                onClick={handleSave}
+                disabled={saving || seatMap.length === 0}
+              >
+                {saving ? '保存中...' : '履歴に保存'}
+              </button>
+            </div>
+            <div className="action-group">
+              <button
+                className="btn btn-outline"
+                onClick={shareImage}
+                disabled={seatMap.length === 0}
+              >
+                共有
+              </button>
+            </div>
+          </>
+        ) : (
+          <div className="action-group">
+            {/* 未ログイン時は表示・共有機能のみに制限 */}
+            <button
+              className="btn btn-outline"
+              onClick={shareImage}
+              disabled={seatMap.length === 0}
+            >
+              共有
+            </button>
+          </div>
+        )}
       </div>
 
       {swapMode && (
@@ -308,7 +323,11 @@ function SeatPage({ authToken, onAuthChange }: SeatPageProps) {
       ) : (
         <div className="empty-state">
           <p>まだ席替えが行われていません</p>
-          <p className="empty-state-sub">「席替え」ボタンを押して開始してください</p>
+          {authToken ? (
+            <p className="empty-state-sub">「席替え」ボタンを押して開始してください</p>
+          ) : (
+            <p className="empty-state-sub">管理者がログインして席替えを行うとここに表示されます</p>
+          )}
         </div>
       )}
 
@@ -333,7 +352,6 @@ function App() {
 
   const handleAuthChange = useCallback((token: string | null) => {
     setAuthToken(token)
-    // localStorage is managed by AuthModal (on login) and here (on logout/401)
     if (!token) localStorage.removeItem('auth_token')
   }, [])
 
@@ -357,12 +375,17 @@ function App() {
           <NavLink to="/" end className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
             座席表
           </NavLink>
-          <NavLink to="/history" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
-            履歴
-          </NavLink>
-          <NavLink to="/settings" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
-            設定
-          </NavLink>
+          {/* ログイン中のみメニューを表示 */}
+          {authToken && (
+            <>
+              <NavLink to="/history" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
+                履歴
+              </NavLink>
+              <NavLink to="/settings" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
+                設定
+              </NavLink>
+            </>
+          )}
         </nav>
         <div className="auth-status">
           {authToken ? (
@@ -383,24 +406,35 @@ function App() {
             path="/"
             element={<SeatPage authToken={authToken} onAuthChange={handleAuthChange} />}
           />
+          {/* 未ログイン時はルートガードでトップページへ強制リダイレクト */}
           <Route
             path="/history"
             element={
-              <HistoryPage
-                authToken={authToken}
-                onRequireAuth={() => setShowAuthModal(true)}
-              />
+              authToken ? (
+                <HistoryPage
+                  authToken={authToken}
+                  onRequireAuth={() => setShowAuthModal(true)}
+                />
+              ) : (
+                <Navigate to="/" replace />
+              )
             }
           />
           <Route
             path="/settings"
             element={
-              <SettingsPage
-                authToken={authToken}
-                onRequireAuth={() => setShowAuthModal(true)}
-              />
+              authToken ? (
+                <SettingsPage
+                  authToken={authToken}
+                  onRequireAuth={() => setShowAuthModal(true)}
+                />
+              ) : (
+                <Navigate to="/" replace />
+              )
             }
           />
+          {/* 存在しないURLや未対応のパスにアクセスした場合はトップにリダイレクト */}
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
 
