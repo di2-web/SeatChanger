@@ -10,7 +10,7 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
-*.local
+*.localnpm install jspdf
 
 # Editor directories and files
 .vscode/*

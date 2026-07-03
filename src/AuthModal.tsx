@@ -3,7 +3,7 @@ import { useState } from 'react'
 interface AuthModalProps {
   isOpen: boolean
   onClose: () => void
-  onAuthenticated: (token: string) => void
+  onAuthenticated: (token: string, isPdfOnly?: boolean) => void
 }
 
 export default function AuthModal({ isOpen, onClose, onAuthenticated }: AuthModalProps) {
@@ -28,7 +28,8 @@ export default function AuthModal({ isOpen, onClose, onAuthenticated }: AuthModa
       if (response.ok) {
         const data = await response.json()
         localStorage.setItem('auth_token', data.token)
-        onAuthenticated(data.token)
+        localStorage.setItem('is_pdf_only', data.isPdfOnly ? 'true' : 'false')
+        onAuthenticated(data.token, data.isPdfOnly)
         setPassword('')
         onClose()
       } else {

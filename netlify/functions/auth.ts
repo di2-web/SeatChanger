@@ -19,13 +19,15 @@ function generateToken(): string {
 
 export async function verifyToken(token: string): Promise<boolean> {
   if (!token) return false;
+  // PDF出力専用トークンでの書き込み（席替え・保存等）はブロックします
+  if (token.endsWith("-pdf")) return false;
 
-  const store = getStore({ name: "seat-settings", consistency: "strong" });
+  const store = getStore("seat-settings");
   try {
     const tokens = await store.get("active-tokens", { type: "json" }) as Record<string, number> | null;
     if (!tokens) return false;
-    const expiry = tokens[token];
 
+    const expiry = tokens[token];
     if (!expiry || Date.now() > expiry) {
       // Clean up expired token
       delete tokens[token];
@@ -48,17 +50,22 @@ export default async (request: Request) => {
     const { password } = body;
 
     const adminPassword = process.env.ADMIN_PASSWORD || "seatchanger2026";
+    const isPdfOnly = password === "export-pdf";
+    const isAdmin = password === adminPassword;
 
-    if (password !== adminPassword) {
+    if (!isAdmin && !isPdfOnly) {
       return new Response(JSON.stringify({ error: "Invalid password" }), {
         status: 401,
         headers: { "Content-Type": "application/json" },
       });
     }
 
-    // Generate and store token
-    const token = generateToken();
-    const store = getStore({ name: "seat-settings", consistency: "strong" });
+    // Generate and store token (PDF専用時は末尾に識別子を付加)
+    let token = generateToken();
+    if (isPdfOnly) {
+      token += "-pdf";
+    }
+    const store = getStore("seat-settings");
 
     let tokens: Record<string, number> = {};
     try {
@@ -81,7 +88,7 @@ export default async (request: Request) => {
     tokens[token] = now + TOKEN_EXPIRY_MS;
     await store.set("active-tokens", JSON.stringify(tokens));
 
-    return Response.json({ token });
+    return Response.json({ token, isPdfOnly });
   } catch {
     return new Response(JSON.stringify({ error: "Internal server error" }), {
       status: 500,
