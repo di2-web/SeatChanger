@@ -1,9 +1,0 @@
-{
-  "name": "SeatChanger",
-  "description": "教室の座席配置・席替え管理アプリケーション",
-  "version": "1.0.0",
-  "permissions": [],
-  "capabilities": [
-    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
-  ]
-}

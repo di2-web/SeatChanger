@@ -4,24 +4,22 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "tsx server.ts",
-    "start": "tsx server.ts",
+    "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview"
   },
   "dependencies": {
-    "express": "^5.2.1",
+    "@netlify/blobs": "^10.7.9",
     "html2canvas": "^1.4.1",
     "jspdf": "^4.2.1",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
-    "react-router-dom": "^7.17.0",
-    "tsx": "^4.23.15"
+    "react-router-dom": "^7.17.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@types/express": "^5.0.6",
+    "@netlify/functions": "^5.2.2",
     "@types/node": "^24.12.3",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",

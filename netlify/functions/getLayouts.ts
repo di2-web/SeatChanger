@@ -1,4 +1,4 @@
-import { getStore } from "./blobs";
+import { getStore } from "@netlify/blobs";
 
 export interface SeatLayout {
   id: string;

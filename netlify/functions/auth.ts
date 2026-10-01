@@ -1,4 +1,10 @@
-import { getStore } from "./blobs";
+import { getStore } from "@netlify/blobs";
+
+declare const process: {
+  env: {
+    ADMIN_PASSWORD?: string;
+  };
+};
 
 const TOKEN_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours
 
@@ -40,7 +46,7 @@ export default async (request: Request) => {
   }
 
   try {
-    const body = (await request.json()) as { password?: string };
+    const body = await request.json();
     const { password } = body;
 
     const adminPassword = process.env.ADMIN_PASSWORD || "seatchanger2026";
