@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
 import { showToast } from './Toast'
+import LayoutEditorModal from './LayoutEditorModal'
+import { type SeatLayout, DEFAULT_LAYOUTS } from './types/layout'
 
 interface Classmate {
   number: number
@@ -15,22 +17,38 @@ interface SettingsPageProps {
 export default function SettingsPage({ authToken, onRequireAuth }: SettingsPageProps) {
   const [classmates, setClassmates] = useState<Classmate[]>([])
   const [frontRowStudents, setFrontRowStudents] = useState<number[]>([])
+  const [layouts, setLayouts] = useState<SeatLayout[]>(DEFAULT_LAYOUTS)
+  const [activeLayoutId, setActiveLayoutId] = useState<string>(DEFAULT_LAYOUTS[0].id)
+  const [showLayoutModal, setShowLayoutModal] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
   const MAX_FRONT_ROW = 12
 
   useEffect(() => {
-    // 関数を useEffect の中に直接定義します
     const fetchSettings = async () => {
       try {
-        const response = await fetch('/.netlify/functions/getSettings')
-        if (!response.ok) {
-          throw new Error('設定の取得に失敗しました')
+        const settingsPromise = fetch('/.netlify/functions/getSettings')
+          .then(res => res.ok ? res.json() : null)
+          .catch(() => null)
+
+        const layoutsPromise = fetch('/.netlify/functions/getLayouts')
+          .then(res => res.ok ? res.json() : null)
+          .catch(() => null)
+
+        const [settingsData, layoutsData] = await Promise.all([settingsPromise, layoutsPromise])
+
+        if (settingsData) {
+          setClassmates(settingsData.classmates || [])
+          setFrontRowStudents(settingsData.frontRowStudents || [])
         }
-        const data = await response.json()
-        setClassmates(data.classmates)
-        setFrontRowStudents(data.frontRowStudents || [])
+
+        if (layoutsData && Array.isArray(layoutsData.layouts) && layoutsData.layouts.length > 0) {
+          setLayouts(layoutsData.layouts)
+          if (layoutsData.activeLayoutId) {
+            setActiveLayoutId(layoutsData.activeLayoutId)
+          }
+        }
       } catch (error) {
         console.error('設定の取得に失敗しました:', error)
         showToast('設定の取得に失敗しました', 'error')
@@ -102,6 +120,67 @@ export default function SettingsPage({ authToken, onRequireAuth }: SettingsPageP
     <div className="page-container">
       <h1 className="page-title">設定</h1>
 
+      {/* 座席配置パターン管理セクション */}
+      <div className="settings-section" style={{ marginBottom: '32px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+          <h2 className="settings-subtitle" style={{ margin: 0 }}>
+            座席配置パターン
+            <span className="settings-counter">{layouts.length} パターン</span>
+          </h2>
+          <button
+            className="btn btn-secondary btn-sm"
+            onClick={() => {
+              if (!authToken) {
+                onRequireAuth()
+                return
+              }
+              setShowLayoutModal(true)
+            }}
+          >
+            配置パターンを編集・作成
+          </button>
+        </div>
+        <p className="settings-description">
+          教室の机の並び（列数・行数・通路・机の配置）を複数パターン作成・編集・切り替えできます
+        </p>
+
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
+          gap: '12px',
+          marginTop: '16px',
+        }}>
+          {layouts.map(layout => {
+            const isActive = layout.id === activeLayoutId
+            const seatCount = layout.seats ? layout.seats.filter(Boolean).length : 0
+            return (
+              <div
+                key={layout.id}
+                style={{
+                  padding: '12px 16px',
+                  borderRadius: '8px',
+                  border: isActive ? '1.5px solid var(--accent)' : '1px solid var(--border)',
+                  background: isActive ? 'var(--accent-bg)' : 'var(--bg)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '4px',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text-h)' }}>
+                    {layout.name}
+                  </span>
+                  {isActive && <span className="active-badge">適用中</span>}
+                </div>
+                <div style={{ fontSize: '12px', color: 'var(--text)' }}>
+                  {layout.columns}列 × {layout.rows}行 ({seatCount}席)
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
       <div className="settings-section">
         <h2 className="settings-subtitle">
           前2列に固定する生徒
@@ -110,7 +189,7 @@ export default function SettingsPage({ authToken, onRequireAuth }: SettingsPageP
           </span>
         </h2>
         <p className="settings-description">
-          チェックした生徒は席替え時に前2列（最前列5席 + 2列目7席）に配置されます
+          チェックした生徒は席替え時に前2列に優先配置されます
         </p>
 
         <div className="student-grid">
@@ -143,6 +222,23 @@ export default function SettingsPage({ authToken, onRequireAuth }: SettingsPageP
           </button>
         </div>
       </div>
+
+      <LayoutEditorModal
+        isOpen={showLayoutModal}
+        onClose={() => setShowLayoutModal(false)}
+        authToken={authToken}
+        onRequireAuth={() => {
+          setShowLayoutModal(false)
+          onRequireAuth()
+        }}
+        activeLayoutId={activeLayoutId}
+        currentLayouts={layouts}
+        onLayoutsUpdated={(updatedLayouts, newActiveId) => {
+          setLayouts(updatedLayouts)
+          setActiveLayoutId(newActiveId)
+        }}
+        totalStudents={classmates.length || 40}
+      />
     </div>
   )
 }

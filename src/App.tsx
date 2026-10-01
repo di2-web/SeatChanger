@@ -7,6 +7,8 @@ import SettingsPage from './SettingsPage'
 import { ToastContainer, showToast } from './Toast'
 import html2canvas from 'html2canvas'
 import jsPDF from 'jspdf'
+import LayoutEditorModal from './LayoutEditorModal'
+import { type SeatLayout, DEFAULT_LAYOUTS } from './types/layout'
 import './App.css'
 
 interface SeatEntry {
@@ -23,6 +25,9 @@ interface SeatPageProps {
 
 function SeatPage({ authToken, isPdfOnly, onAuthChange }: SeatPageProps) {
   const [seatMap, setSeatMap] = useState<SeatEntry[]>([])
+  const [layouts, setLayouts] = useState<SeatLayout[]>(DEFAULT_LAYOUTS)
+  const [activeLayoutId, setActiveLayoutId] = useState<string>(DEFAULT_LAYOUTS[0].id)
+  const [showLayoutModal, setShowLayoutModal] = useState(false)
   const [loading, setLoading] = useState(true)
   const [shuffling, setShuffling] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -35,21 +40,36 @@ function SeatPage({ authToken, isPdfOnly, onAuthChange }: SeatPageProps) {
 
   const printAreaRef = useRef<HTMLDivElement>(null)
 
-  // Fetch latest seat from history on mount
+  // Fetch layouts and latest seat from history on mount
   useEffect(() => {
     let ignore = false
     const fetchInitialData = async () => {
       try {
-        const response = await fetch('/.netlify/functions/getSeatHistory')
-        if (response.ok) {
-          const history = await response.json()
-          if (!ignore && history.length > 0) {
-            setSeatMap(history[0].seatMap)
-            setLoading(false)
-            return
+        // Fetch layouts
+        const layoutPromise = fetch('/.netlify/functions/getLayouts')
+          .then(res => res.ok ? res.json() : null)
+          .catch(() => null)
+
+        // Fetch seat history
+        const historyPromise = fetch('/.netlify/functions/getSeatHistory')
+          .then(res => res.ok ? res.json() : null)
+          .catch(() => null)
+
+        const [layoutData, historyData] = await Promise.all([layoutPromise, historyPromise])
+
+        if (!ignore) {
+          if (layoutData && Array.isArray(layoutData.layouts) && layoutData.layouts.length > 0) {
+            setLayouts(layoutData.layouts)
+            if (layoutData.activeLayoutId) {
+              setActiveLayoutId(layoutData.activeLayoutId)
+            }
           }
+
+          if (historyData && Array.isArray(historyData) && historyData.length > 0) {
+            setSeatMap(historyData[0].seatMap)
+          }
+          setLoading(false)
         }
-        if (!ignore) setLoading(false)
       } catch (error) {
         console.error('初回データの取得に失敗しました:', error)
         if (!ignore) setLoading(false)
@@ -58,6 +78,28 @@ function SeatPage({ authToken, isPdfOnly, onAuthChange }: SeatPageProps) {
     fetchInitialData()
     return () => { ignore = true }
   }, [])
+
+  const handleLayoutSelect = async (newId: string) => {
+    setActiveLayoutId(newId)
+    if (authToken && !isPdfOnly) {
+      try {
+        const response = await fetch('/.netlify/functions/saveLayouts', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${authToken}`,
+          },
+          body: JSON.stringify({ layouts, activeLayoutId: newId }),
+        })
+        if (response.status === 401) {
+          localStorage.removeItem('auth_token')
+          onAuthChange(null)
+        }
+      } catch (e) {
+        console.error('アクティブレイアウトの保存に失敗しました:', e)
+      }
+    }
+  }
 
   const requireAuth = useCallback((action: string) => {
     setPendingAction(action)
@@ -282,9 +324,42 @@ function SeatPage({ authToken, isPdfOnly, onAuthChange }: SeatPageProps) {
     )
   }
 
+  const activeLayout = layouts.find(l => l.id === activeLayoutId) || layouts[0] || DEFAULT_LAYOUTS[0]
+
   return (
     <>
       <div className="action-bar">
+        {/* 配置パターンの選択（誰でも切り替え可）＆編集ボタン（管理者のみ） */}
+        <div className="action-group layout-selector-group">
+          <label htmlFor="layout-select" style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text)' }}>
+            配置パターン:
+          </label>
+          <select
+            id="layout-select"
+            className="layout-select"
+            value={activeLayoutId}
+            onChange={(e) => handleLayoutSelect(e.target.value)}
+          >
+            {layouts.map(l => {
+              const seatCount = l.seats ? l.seats.filter(Boolean).length : 0
+              return (
+                <option key={l.id} value={l.id}>
+                  {l.name} ({l.columns}列×{l.rows}行 / {seatCount}席)
+                </option>
+              )
+            })}
+          </select>
+          {authToken && !isPdfOnly && (
+            <button
+              className="btn btn-outline btn-sm"
+              onClick={() => setShowLayoutModal(true)}
+              title="配置パターンを編集・作成"
+            >
+              配置編集
+            </button>
+          )}
+        </div>
+
         {authToken && !isPdfOnly ? (
           // フル管理者用表示
           <>
@@ -317,7 +392,7 @@ function SeatPage({ authToken, isPdfOnly, onAuthChange }: SeatPageProps) {
                 onClick={downloadPDF}
                 disabled={seatMap.length === 0}
               >
-                📄 PDF
+                PDF
               </button>
               <button
                 className="btn btn-outline"
@@ -336,7 +411,7 @@ function SeatPage({ authToken, isPdfOnly, onAuthChange }: SeatPageProps) {
               onClick={downloadPDF}
               disabled={seatMap.length === 0}
             >
-              📄 PDF
+              PDF
             </button>
             <button
               className="btn btn-outline"
@@ -382,6 +457,7 @@ function SeatPage({ authToken, isPdfOnly, onAuthChange }: SeatPageProps) {
           >
             <SeatMapping
               seatMap={seatMap}
+              layout={activeLayout}
               onSeatClick={swapMode ? handleSeatClick : undefined}
               selectedSeatIdx={selectedSeatIdx}
               swapMode={swapMode}
@@ -406,6 +482,23 @@ function SeatPage({ authToken, isPdfOnly, onAuthChange }: SeatPageProps) {
           setPendingAction(null)
         }}
         onAuthenticated={handleAuthenticated}
+      />
+
+      <LayoutEditorModal
+        isOpen={showLayoutModal}
+        onClose={() => setShowLayoutModal(false)}
+        authToken={authToken}
+        onRequireAuth={() => {
+          onAuthChange(null)
+          requireAuth('editLayout')
+        }}
+        activeLayoutId={activeLayoutId}
+        currentLayouts={layouts}
+        onLayoutsUpdated={(updatedLayouts, newActiveId) => {
+          setLayouts(updatedLayouts)
+          setActiveLayoutId(newActiveId)
+        }}
+        totalStudents={40}
       />
     </>
   )

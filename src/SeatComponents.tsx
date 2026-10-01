@@ -1,3 +1,11 @@
+import { type SeatLayout, DEFAULT_LAYOUTS } from "./types/layout";
+
+export interface SeatStudent {
+  number: number;
+  name: string;
+  ruby: string;
+}
+
 interface SeatCardProps {
   number: number;
   name: string;
@@ -57,7 +65,8 @@ function SeatCard({
 }
 
 interface SeatMappingProps {
-  seatMap: { number: number; name: string; ruby: string }[];
+  seatMap: SeatStudent[];
+  layout?: SeatLayout | null;
   onSeatClick?: (seatMapIdx: number) => void;
   selectedSeatIdx?: number | null;
   swapMode?: boolean;
@@ -65,41 +74,78 @@ interface SeatMappingProps {
 
 function SeatMapping({
   seatMap,
+  layout,
   onSeatClick,
   selectedSeatIdx,
   swapMode = false,
 }: SeatMappingProps) {
-  if (seatMap.length !== 40) {
-    return (
-      <div className="seat-map-error">
-        <p>shuffle系のロジックに誤りがあります</p>
-      </div>
-    );
+  // layout が指定されていない場合はデフォルトレイアウトを使用
+  const currentLayout = layout || DEFAULT_LAYOUTS[0];
+
+  // レイアウトのセル数
+  const totalCells = currentLayout.rows * currentLayout.columns;
+
+  // 各セルに割り当てる要素を構築
+  let studentIdx = 0;
+  const gridCells: {
+    cellIndex: number;
+    isSeat: boolean;
+    student: SeatStudent | null;
+    originalIdx: number;
+  }[] = [];
+
+  for (let i = 0; i < totalCells; i++) {
+    const isSeat = currentLayout.seats ? currentLayout.seats[i] : true;
+    if (isSeat) {
+      if (studentIdx < seatMap.length) {
+        gridCells.push({
+          cellIndex: i,
+          isSeat: true,
+          student: seatMap[studentIdx],
+          originalIdx: studentIdx,
+        });
+      } else {
+        // 座席数が生徒数より多い場合の空席
+        gridCells.push({
+          cellIndex: i,
+          isSeat: true,
+          student: { number: 0, name: "", ruby: "" },
+          originalIdx: -1,
+        });
+      }
+      studentIdx++;
+    } else {
+      // 通路/空白セル
+      gridCells.push({
+        cellIndex: i,
+        isSeat: false,
+        student: { number: 0, name: "", ruby: "" },
+        originalIdx: -1,
+      });
+    }
   }
 
-  // 各席に元のインデックスを付与
-  const annotated = seatMap.map((seat, idx) => ({ ...seat, originalIdx: idx }));
-  // 表示用の空席を特定位置に挿入
-  annotated.splice(3, 0, { number: 0, name: "", ruby: "", originalIdx: -1 });
-  annotated.splice(6, 0, { number: 0, name: "", ruby: "", originalIdx: -1 });
+  const gridStyle = {
+    gridTemplateColumns: `repeat(${currentLayout.columns}, minmax(0, 1fr))`,
+  };
 
   return (
     <>
       <div className="teachers-seat">
         <p className="teacher-seat-box">教卓</p>
       </div>
-      <div className="seat-map-grid">
-        {annotated.map((seat, index) => {
-          const cardKey = seat.number === 0 ? `empty-${index}` : seat.number;
+      <div className="seat-map-grid" style={gridStyle}>
+        {gridCells.map((cell) => {
+          const cardKey = `cell-${cell.cellIndex}`;
           return (
             <SeatCard
               key={cardKey}
-              number={seat.number}
-              name={seat.name}
-              ruby={seat.ruby}
-              seatMapIdx={seat.originalIdx}
-              isSelected={seat.originalIdx >= 0 && selectedSeatIdx === seat.originalIdx}
-              swapMode={swapMode}
+              number={cell.student?.number || 0}
+              name={cell.student?.name || ""}
+              ruby={cell.student?.ruby || ""}
+              seatMapIdx={cell.originalIdx}
+              isSelected={cell.originalIdx >= 0 && selectedSeatIdx === cell.originalIdx}
+              swapMode={swapMode && cell.originalIdx >= 0}
               onSeatClick={onSeatClick}
             />
           );
