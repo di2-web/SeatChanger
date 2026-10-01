@@ -1,4 +1,4 @@
-import { getStore } from "@netlify/blobs";
+import { getStore } from "./blobs";
 import classmates from "./classmates.json";
 
 export default async () => {
