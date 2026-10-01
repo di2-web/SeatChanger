@@ -106,9 +106,14 @@ function SeatPage({ authToken, isPdfOnly, onAuthChange }: SeatPageProps) {
       const settings = await fetchSettingsData()
       const currentActive =
         layouts.find(l => l.id === activeLayoutId) || layouts[0] || DEFAULT_LAYOUTS[0]
+      const frontRowStudents =
+        Array.isArray(currentActive.frontRowStudents)
+          ? currentActive.frontRowStudents
+          : (settings.frontRowStudents || [])
+
       const newSeatMap = performShuffle(
         settings.classmates,
-        settings.frontRowStudents,
+        frontRowStudents,
         currentActive
       )
 

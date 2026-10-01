@@ -184,6 +184,7 @@ function LayoutEditorContent({
       name: `${current.name} (コピー)`,
       seats: [...editingSeats],
       isDefault: false,
+      frontRowStudents: current.frontRowStudents ? [...current.frontRowStudents] : [],
     }
 
     const nextLayouts = [...layouts, newLayout]

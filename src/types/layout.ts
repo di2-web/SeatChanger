@@ -6,6 +6,8 @@ export interface SeatLayout {
   // seats: 各セル (index = r * columns + c) が座席(true)か通路(false)か
   seats: boolean[];
   isDefault?: boolean;
+  // パターンごとの前2列固定生徒（出席番号リスト）
+  frontRowStudents?: number[];
 }
 
 // デフォルトのレイアウトパターン（標準の1パターンのみ）
