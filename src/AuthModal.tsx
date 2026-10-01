@@ -19,22 +19,45 @@ export default function AuthModal({ isOpen, onClose, onAuthenticated }: AuthModa
     setLoading(true)
 
     try {
-      const response = await fetch('/.netlify/functions/auth', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password }),
-      })
+      const adminPassword = import.meta.env.VITE_ADMIN_PASSWORD || 'seatchanger2026'
+      const isPdf = password === 'export-pdf'
+      const isAdmin = password === adminPassword
 
-      if (response.ok) {
-        const data = await response.json()
-        localStorage.setItem('auth_token', data.token)
-        localStorage.setItem('is_pdf_only', data.isPdfOnly ? 'true' : 'false')
-        onAuthenticated(data.token, data.isPdfOnly)
-        setPassword('')
-        onClose()
-      } else {
+      if (!isAdmin && !isPdf) {
+        // Netlify auth がある場合は念のため確認
+        try {
+          const response = await fetch('/.netlify/functions/auth', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ password }),
+          })
+          if (response.ok) {
+            const data = await response.json()
+            localStorage.setItem('auth_token', data.token)
+            localStorage.setItem('is_pdf_only', data.isPdfOnly ? 'true' : 'false')
+            onAuthenticated(data.token, data.isPdfOnly)
+            setPassword('')
+            onClose()
+            return
+          }
+        } catch {
+          // ignore
+        }
+
         setError('パスワードが正しくありません')
+        return
       }
+
+      // 認証成功トークンを生成
+      const token = isPdf
+        ? `pdf-token-${Date.now()}-pdf`
+        : `admin-token-${Date.now()}`
+
+      localStorage.setItem('auth_token', token)
+      localStorage.setItem('is_pdf_only', isPdf ? 'true' : 'false')
+      onAuthenticated(token, isPdf)
+      setPassword('')
+      onClose()
     } catch {
       setError('認証に失敗しました。もう一度お試しください。')
     } finally {

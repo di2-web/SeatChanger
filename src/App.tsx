@@ -100,40 +100,17 @@ function SeatPage({ authToken, isPdfOnly, onAuthChange }: SeatPageProps) {
     setShowAuthModal(true)
   }, [])
 
-  const doShuffle = async (token: string) => {
+  const doShuffle = async () => {
     setShuffling(true)
     try {
-      let newSeatMap: SeatEntry[] | null = null
-
-      // Netlify function が利用可能なら試行
-      try {
-        const response = await fetch('/.netlify/functions/changeSeat', {
-          headers: { 'Authorization': `Bearer ${token}` },
-        })
-        if (response.status === 401) {
-          localStorage.removeItem('auth_token')
-          onAuthChange(null)
-          requireAuth('shuffle')
-          return
-        }
-        if (response.ok) {
-          newSeatMap = await response.json()
-        }
-      } catch {
-        // Netlify 未稼働時はクライアントサイドで確実なシャッフルを実行
-      }
-
-      // Netlify から得られなかった場合はローカルシャッフルアルゴリズムで生成
-      if (!newSeatMap) {
-        const settings = await fetchSettingsData()
-        const currentActive =
-          layouts.find(l => l.id === activeLayoutId) || layouts[0] || DEFAULT_LAYOUTS[0]
-        newSeatMap = performShuffle(
-          settings.classmates,
-          settings.frontRowStudents,
-          currentActive
-        )
-      }
+      const settings = await fetchSettingsData()
+      const currentActive =
+        layouts.find(l => l.id === activeLayoutId) || layouts[0] || DEFAULT_LAYOUTS[0]
+      const newSeatMap = performShuffle(
+        settings.classmates,
+        settings.frontRowStudents,
+        currentActive
+      )
 
       setSeatMap(newSeatMap)
       setSwapMode(false)
@@ -171,7 +148,7 @@ function SeatPage({ authToken, isPdfOnly, onAuthChange }: SeatPageProps) {
     onAuthChange(token, isPdf)
     setShowAuthModal(false)
     if (pendingAction === 'shuffle') {
-      doShuffle(token)
+      doShuffle()
     } else if (pendingAction === 'save') {
       doSave(token, seatMap)
     }
@@ -182,7 +159,7 @@ function SeatPage({ authToken, isPdfOnly, onAuthChange }: SeatPageProps) {
   const handleShuffle = () => {
     if (shuffling) return
     if (!authToken) { requireAuth('shuffle'); return }
-    doShuffle(authToken)
+    doShuffle()
   }
 
   const handleSave = () => {
