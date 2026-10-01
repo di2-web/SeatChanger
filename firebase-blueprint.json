@@ -1,0 +1,101 @@
+{
+  "entities": {
+    "SeatHistory": {
+      "title": "SeatHistory",
+      "description": "保存された座席配置の履歴データ",
+      "type": "object",
+      "properties": {
+        "seatMap": {
+          "type": "array",
+          "description": "座席の生徒割り当てリスト"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "作成日時 (ISO8601)"
+        },
+        "action": {
+          "type": "string",
+          "description": "保存アクション種別 (save, restore など)"
+        }
+      },
+      "required": ["seatMap", "createdAt"]
+    },
+    "SeatLayouts": {
+      "title": "SeatLayouts",
+      "description": "教室の座席配置パターン一覧および適用中のレイアウトID",
+      "type": "object",
+      "properties": {
+        "layouts": {
+          "type": "array",
+          "description": "座席レイアウトの配列"
+        },
+        "activeLayoutId": {
+          "type": "string",
+          "description": "現在アクティブなレイアウトID"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "最終更新日時"
+        }
+      },
+      "required": ["layouts", "activeLayoutId"]
+    },
+    "CurrentSeat": {
+      "title": "CurrentSeat",
+      "description": "現在の最新の座席表データ",
+      "type": "object",
+      "properties": {
+        "seatMap": {
+          "type": "array",
+          "description": "座席の生徒割り当てリスト"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "最終更新日時"
+        }
+      },
+      "required": ["seatMap"]
+    },
+    "ClassmatesSettings": {
+      "title": "ClassmatesSettings",
+      "description": "生徒名簿および前2列固定設定",
+      "type": "object",
+      "properties": {
+        "frontRowStudents": {
+          "type": "array",
+          "description": "前2列に固定配置する生徒の出席番号リスト"
+        },
+        "classmates": {
+          "type": "array",
+          "description": "クラスの生徒名簿リスト"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "最終更新日時"
+        }
+      }
+    }
+  },
+  "firestore": {
+    "/seat_history/{historyId}": {
+      "entity": "SeatHistory",
+      "description": "過去の席替え履歴コレクション"
+    },
+    "/settings/layouts": {
+      "entity": "SeatLayouts",
+      "description": "座席配置パターン設定ドキュメント"
+    },
+    "/settings/current_seat": {
+      "entity": "CurrentSeat",
+      "description": "最新座席配置ドキュメント"
+    },
+    "/settings/classmates_settings": {
+      "entity": "ClassmatesSettings",
+      "description": "生徒固定設定ドキュメント"
+    }
+  }
+}

@@ -1,4 +1,4 @@
-import { getStore } from "@netlify/blobs";
+import { getStore } from "./blobs";
 import { verifyToken } from "./auth";
 
 export default async (request: Request) => {
@@ -17,7 +17,7 @@ export default async (request: Request) => {
   }
 
   try {
-    const body = await request.json();
+    const body = (await request.json()) as { seatMap?: unknown[]; action?: string };
     const { seatMap, action } = body;
 
     if (!seatMap || !Array.isArray(seatMap)) {

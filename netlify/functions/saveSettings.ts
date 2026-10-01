@@ -1,4 +1,4 @@
-import { getStore } from "@netlify/blobs";
+import { getStore } from "./blobs";
 import { verifyToken } from "./auth";
 
 export default async (request: Request) => {
@@ -18,7 +18,7 @@ export default async (request: Request) => {
   }
 
   try {
-    const body = await request.json();
+    const body = (await request.json()) as { frontRowStudents?: number[] };
     const { frontRowStudents } = body;
 
     if (!Array.isArray(frontRowStudents)) {

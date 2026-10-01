@@ -1,12 +1,7 @@
 import { useState, useEffect } from 'react'
 import SeatMapping from './SeatComponents'
 import { showToast } from './Toast'
-
-interface HistoryEntry {
-  key: string
-  seatMap: { number: number; name: string; ruby: string }[]
-  createdAt: string
-}
+import { fetchSeatHistory, saveSeatData, type HistoryEntry } from './services/dataService'
 
 interface HistoryPageProps {
   authToken: string | null
@@ -17,26 +12,34 @@ export default function HistoryPage({ authToken, onRequireAuth }: HistoryPagePro
   const [history, setHistory] = useState<HistoryEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [expandedKey, setExpandedKey] = useState<string | null>(null)
+  const [restoringKey, setRestoringKey] = useState<string | null>(null)
 
   useEffect(() => {
-    // 関数を useEffect の中に直接定義します
-    const fetchHistory = async () => {
+    let ignore = false
+
+    const loadHistory = async () => {
       try {
-        const response = await fetch('/.netlify/functions/getSeatHistory')
-        if (!response.ok) {
-          throw new Error('履歴の取得に失敗しました')
+        const data = await fetchSeatHistory()
+        if (!ignore) {
+          setHistory(data)
         }
-        const data = await response.json()
-        setHistory(data)
       } catch (error) {
         console.error('履歴の取得に失敗しました:', error)
-        showToast('履歴の取得に失敗しました', 'error')
+        if (!ignore) {
+          showToast('履歴の取得に失敗しました', 'error')
+        }
       } finally {
-        setLoading(false)
+        if (!ignore) {
+          setLoading(false)
+        }
       }
     }
 
-    fetchHistory()
+    loadHistory()
+
+    return () => {
+      ignore = true
+    }
   }, [])
 
   const handleRestore = async (entry: HistoryEntry) => {
@@ -45,32 +48,18 @@ export default function HistoryPage({ authToken, onRequireAuth }: HistoryPagePro
       return
     }
 
+    setRestoringKey(entry.key)
     try {
-      const response = await fetch('/.netlify/functions/saveSeat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${authToken}`,
-        },
-        body: JSON.stringify({
-          seatMap: entry.seatMap,
-          action: 'restore',
-        }),
-      })
-
-      if (response.status === 401) {
-        onRequireAuth()
-        return
-      }
-
-      if (!response.ok) {
-        throw new Error('復元に失敗しました')
-      }
-
-      showToast('座席配置を復元しました', 'success')
+      const res = await saveSeatData(entry.seatMap, 'restore', authToken)
+      const msg = res.firestore
+        ? '座席配置をFirestoreに保存・復元しました'
+        : '座席配置を復元しました'
+      showToast(msg, 'success')
     } catch (error) {
       console.error('復元に失敗しました:', error)
       showToast('復元に失敗しました', 'error')
+    } finally {
+      setRestoringKey(null)
     }
   }
 
@@ -95,11 +84,16 @@ export default function HistoryPage({ authToken, onRequireAuth }: HistoryPagePro
 
   return (
     <div className="page-container">
-      <h1 className="page-title">席替え履歴</h1>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+        <h1 className="page-title" style={{ margin: 0 }}>席替え履歴</h1>
+      </div>
 
       {history.length === 0 ? (
         <div className="empty-state">
           <p>まだ履歴がありません</p>
+          <p className="empty-state-sub">
+            席替え後に「履歴に保存」を実行するとFirestoreに自動保存されます
+          </p>
         </div>
       ) : (
         <div className="history-list">
@@ -110,8 +104,12 @@ export default function HistoryPage({ authToken, onRequireAuth }: HistoryPagePro
                 onClick={() => setExpandedKey(expandedKey === entry.key ? null : entry.key)}
               >
                 <div className="history-date">
-                  
                   {formatDate(entry.createdAt)}
+                  {entry.action === 'restore' && (
+                    <span style={{ marginLeft: '8px', fontSize: '11px', color: 'var(--text)', opacity: 0.8 }}>
+                      (復元)
+                    </span>
+                  )}
                 </div>
                 <span className={`history-expand-icon ${expandedKey === entry.key ? 'expanded' : ''}`}>
                   ▸
@@ -127,8 +125,9 @@ export default function HistoryPage({ authToken, onRequireAuth }: HistoryPagePro
                     <button
                       className="btn btn-secondary"
                       onClick={() => handleRestore(entry)}
+                      disabled={restoringKey === entry.key}
                     >
-                      この配置を復元
+                      {restoringKey === entry.key ? '復元中...' : 'この配置を復元'}
                     </button>
                   </div>
                 </div>

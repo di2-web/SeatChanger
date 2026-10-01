@@ -1,4 +1,4 @@
-import { getStore } from "@netlify/blobs";
+import { getStore } from "./blobs";
 
 interface SavedHistoryEntry {
   seatMap: { number: number; name: string; ruby: string }[];

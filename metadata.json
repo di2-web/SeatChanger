@@ -1,0 +1,6 @@
+{
+  "name": "Seat Changer - 席替え＆配置管理",
+  "description": "Firebase Firestore連携対応の座席表・席替え管理アプリケーション。座席配置パターンや席替え履歴をクラウドに保存できます。",
+  "permissions": [],
+  "capabilities": []
+}

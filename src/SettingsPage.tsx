@@ -2,12 +2,12 @@ import { useState, useEffect } from 'react'
 import { showToast } from './Toast'
 import LayoutEditorModal from './LayoutEditorModal'
 import { type SeatLayout, DEFAULT_LAYOUTS } from './types/layout'
-
-interface Classmate {
-  number: number
-  name: string
-  ruby: string
-}
+import {
+  fetchSettingsData,
+  fetchSeatLayouts,
+  saveSettingsData,
+  type Classmate,
+} from './services/dataService'
 
 interface SettingsPageProps {
   authToken: string | null
@@ -26,38 +26,41 @@ export default function SettingsPage({ authToken, onRequireAuth }: SettingsPageP
   const MAX_FRONT_ROW = 12
 
   useEffect(() => {
-    const fetchSettings = async () => {
+    let ignore = false
+
+    const loadAllSettings = async () => {
       try {
-        const settingsPromise = fetch('/.netlify/functions/getSettings')
-          .then(res => res.ok ? res.json() : null)
-          .catch(() => null)
+        const [settingsResult, layoutsResult] = await Promise.all([
+          fetchSettingsData(),
+          fetchSeatLayouts(),
+        ])
 
-        const layoutsPromise = fetch('/.netlify/functions/getLayouts')
-          .then(res => res.ok ? res.json() : null)
-          .catch(() => null)
+        if (!ignore) {
+          setClassmates(settingsResult.classmates)
+          setFrontRowStudents(settingsResult.frontRowStudents)
 
-        const [settingsData, layoutsData] = await Promise.all([settingsPromise, layoutsPromise])
-
-        if (settingsData) {
-          setClassmates(settingsData.classmates || [])
-          setFrontRowStudents(settingsData.frontRowStudents || [])
-        }
-
-        if (layoutsData && Array.isArray(layoutsData.layouts) && layoutsData.layouts.length > 0) {
-          setLayouts(layoutsData.layouts)
-          if (layoutsData.activeLayoutId) {
-            setActiveLayoutId(layoutsData.activeLayoutId)
+          if (layoutsResult.layouts && layoutsResult.layouts.length > 0) {
+            setLayouts(layoutsResult.layouts)
+            setActiveLayoutId(layoutsResult.activeLayoutId)
           }
         }
       } catch (error) {
         console.error('設定の取得に失敗しました:', error)
-        showToast('設定の取得に失敗しました', 'error')
+        if (!ignore) {
+          showToast('設定の取得に失敗しました', 'error')
+        }
       } finally {
-        setLoading(false)
+        if (!ignore) {
+          setLoading(false)
+        }
       }
     }
 
-    fetchSettings()
+    loadAllSettings()
+
+    return () => {
+      ignore = true
+    }
   }, [])
 
   const handleToggle = (studentNumber: number) => {
@@ -81,25 +84,11 @@ export default function SettingsPage({ authToken, onRequireAuth }: SettingsPageP
 
     setSaving(true)
     try {
-      const response = await fetch('/.netlify/functions/saveSettings', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${authToken}`,
-        },
-        body: JSON.stringify({ frontRowStudents }),
-      })
-
-      if (response.status === 401) {
-        onRequireAuth()
-        return
-      }
-
-      if (!response.ok) {
-        throw new Error('設定の保存に失敗しました')
-      }
-
-      showToast('設定を保存しました', 'success')
+      const res = await saveSettingsData(frontRowStudents, authToken)
+      const msg = res.firestore
+        ? '設定をFirestoreに保存しました'
+        : '設定を保存しました'
+      showToast(msg, 'success')
     } catch (error) {
       console.error('設定の保存に失敗しました:', error)
       showToast('設定の保存に失敗しました', 'error')
@@ -141,7 +130,7 @@ export default function SettingsPage({ authToken, onRequireAuth }: SettingsPageP
           </button>
         </div>
         <p className="settings-description">
-          教室の机の並び（列数・行数・通路・机の配置）を複数パターン作成・編集・切り替えできます
+          教室の机の並び（列数・行数・通路・机の配置）を複数パターン作成・編集・切り替えできます（Firestoreに自動保存されます）
         </p>
 
         <div style={{
@@ -181,6 +170,7 @@ export default function SettingsPage({ authToken, onRequireAuth }: SettingsPageP
         </div>
       </div>
 
+      {/* 前2列固定生徒セクション */}
       <div className="settings-section">
         <h2 className="settings-subtitle">
           前2列に固定する生徒

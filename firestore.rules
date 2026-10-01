@@ -1,0 +1,16 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 席替えアプリ用の設定および座席・レイアウト履歴データ
+    // 各学校・教室で共有利用可能
+    match /settings/{document=**} {
+      allow read, write: if true;
+    }
+    match /seat_history/{historyId} {
+      allow read, write: if true;
+    }
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}

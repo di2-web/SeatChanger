@@ -9,13 +9,17 @@ import html2canvas from 'html2canvas'
 import jsPDF from 'jspdf'
 import LayoutEditorModal from './LayoutEditorModal'
 import { type SeatLayout, DEFAULT_LAYOUTS } from './types/layout'
+import {
+  fetchSeatLayouts,
+  saveSeatLayouts,
+  fetchSeatHistory,
+  saveSeatData,
+  fetchCurrentSeat,
+  fetchSettingsData,
+  performShuffle,
+  type SeatEntry,
+} from './services/dataService'
 import './App.css'
-
-interface SeatEntry {
-  number: number
-  name: string
-  ruby: string
-}
 
 interface SeatPageProps {
   authToken: string | null
@@ -40,22 +44,17 @@ function SeatPage({ authToken, isPdfOnly, onAuthChange }: SeatPageProps) {
 
   const printAreaRef = useRef<HTMLDivElement>(null)
 
-  // Fetch layouts and latest seat from history on mount
+  // 初期データ取得 (Firestore / Netlify / Local)
   useEffect(() => {
     let ignore = false
-    const fetchInitialData = async () => {
+
+    const loadInitialData = async () => {
       try {
-        // Fetch layouts
-        const layoutPromise = fetch('/.netlify/functions/getLayouts')
-          .then(res => res.ok ? res.json() : null)
-          .catch(() => null)
-
-        // Fetch seat history
-        const historyPromise = fetch('/.netlify/functions/getSeatHistory')
-          .then(res => res.ok ? res.json() : null)
-          .catch(() => null)
-
-        const [layoutData, historyData] = await Promise.all([layoutPromise, historyPromise])
+        const [layoutData, currentSeatData, historyData] = await Promise.all([
+          fetchSeatLayouts(),
+          fetchCurrentSeat(),
+          fetchSeatHistory(),
+        ])
 
         if (!ignore) {
           if (layoutData && Array.isArray(layoutData.layouts) && layoutData.layouts.length > 0) {
@@ -65,39 +64,34 @@ function SeatPage({ authToken, isPdfOnly, onAuthChange }: SeatPageProps) {
             }
           }
 
-          if (historyData && Array.isArray(historyData) && historyData.length > 0) {
+          if (currentSeatData && currentSeatData.length > 0) {
+            setSeatMap(currentSeatData)
+          } else if (historyData && Array.isArray(historyData) && historyData.length > 0) {
             setSeatMap(historyData[0].seatMap)
           }
-          setLoading(false)
         }
       } catch (error) {
         console.error('初回データの取得に失敗しました:', error)
-        if (!ignore) setLoading(false)
+      } finally {
+        if (!ignore) {
+          setLoading(false)
+        }
       }
     }
-    fetchInitialData()
-    return () => { ignore = true }
+
+    loadInitialData()
+
+    return () => {
+      ignore = true
+    }
   }, [])
 
   const handleLayoutSelect = async (newId: string) => {
     setActiveLayoutId(newId)
-    if (authToken && !isPdfOnly) {
-      try {
-        const response = await fetch('/.netlify/functions/saveLayouts', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${authToken}`,
-          },
-          body: JSON.stringify({ layouts, activeLayoutId: newId }),
-        })
-        if (response.status === 401) {
-          localStorage.removeItem('auth_token')
-          onAuthChange(null)
-        }
-      } catch (e) {
-        console.error('アクティブレイアウトの保存に失敗しました:', e)
-      }
+    try {
+      await saveSeatLayouts(layouts, newId, authToken)
+    } catch (e) {
+      console.error('アクティブレイアウトの保存に失敗しました:', e)
     }
   }
 
@@ -109,18 +103,39 @@ function SeatPage({ authToken, isPdfOnly, onAuthChange }: SeatPageProps) {
   const doShuffle = async (token: string) => {
     setShuffling(true)
     try {
-      const response = await fetch('/.netlify/functions/changeSeat', {
-        headers: { 'Authorization': `Bearer ${token}` },
-      })
-      if (response.status === 401) {
-        localStorage.removeItem('auth_token')
-        onAuthChange(null)
-        requireAuth('shuffle')
-        return
+      let newSeatMap: SeatEntry[] | null = null
+
+      // Netlify function が利用可能なら試行
+      try {
+        const response = await fetch('/.netlify/functions/changeSeat', {
+          headers: { 'Authorization': `Bearer ${token}` },
+        })
+        if (response.status === 401) {
+          localStorage.removeItem('auth_token')
+          onAuthChange(null)
+          requireAuth('shuffle')
+          return
+        }
+        if (response.ok) {
+          newSeatMap = await response.json()
+        }
+      } catch {
+        // Netlify 未稼働時はクライアントサイドで確実なシャッフルを実行
       }
-      if (!response.ok) throw new Error(`HTTP error: ${response.status}`)
-      const data = await response.json()
-      setSeatMap(data)
+
+      // Netlify から得られなかった場合はローカルシャッフルアルゴリズムで生成
+      if (!newSeatMap) {
+        const settings = await fetchSettingsData()
+        const currentActive =
+          layouts.find(l => l.id === activeLayoutId) || layouts[0] || DEFAULT_LAYOUTS[0]
+        newSeatMap = performShuffle(
+          settings.classmates,
+          settings.frontRowStudents,
+          currentActive
+        )
+      }
+
+      setSeatMap(newSeatMap)
       setSwapMode(false)
       setSelectedSeatIdx(null)
       showToast('席替えを実行しました', 'success')
@@ -139,22 +154,11 @@ function SeatPage({ authToken, isPdfOnly, onAuthChange }: SeatPageProps) {
     }
     setSaving(true)
     try {
-      const response = await fetch('/.netlify/functions/saveSeat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({ seatMap: currentSeatMap }),
-      })
-      if (response.status === 401) {
-        localStorage.removeItem('auth_token')
-        onAuthChange(null)
-        requireAuth('save')
-        return
-      }
-      if (!response.ok) throw new Error(`HTTP error: ${response.status}`)
-      showToast('履歴に保存しました', 'success')
+      const res = await saveSeatData(currentSeatMap, 'save', token)
+      const msg = res.firestore
+        ? 'Firestoreデータベースと履歴に保存しました'
+        : '履歴に保存しました'
+      showToast(msg, 'success')
     } catch (error) {
       console.error('保存に失敗しました:', error)
       showToast('保存に失敗しました', 'error')
@@ -329,7 +333,7 @@ function SeatPage({ authToken, isPdfOnly, onAuthChange }: SeatPageProps) {
   return (
     <>
       <div className="action-bar">
-        {/* 配置パターンの選択（誰でも切り替え可）＆編集ボタン（管理者のみ） */}
+        {/* 配置パターンの選択＆編集 */}
         <div className="action-group layout-selector-group">
           <label htmlFor="layout-select" style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text)' }}>
             配置パターン:
@@ -547,7 +551,6 @@ function App() {
           <NavLink to="/" end className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
             座席表
           </NavLink>
-          {/* フル管理者（かつPDF専用ユーザーではない）場合のみメニューを表示 */}
           {authToken && !isPdfOnly && (
             <>
               <NavLink to="/history" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
@@ -584,7 +587,6 @@ function App() {
               />
             }
           />
-          {/* PDF専用ユーザーは履歴と設定ページへのアクセスも弾くように設定 */}
           <Route
             path="/history"
             element={
@@ -620,6 +622,7 @@ function App() {
         onClose={() => setShowAuthModal(false)}
         onAuthenticated={handleHeaderAuthenticated}
       />
+
       <ToastContainer />
     </BrowserRouter>
   )

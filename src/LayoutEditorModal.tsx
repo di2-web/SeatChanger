@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { type SeatLayout, DEFAULT_LAYOUTS } from './types/layout'
 import { showToast } from './Toast'
+import { saveSeatLayouts } from './services/dataService'
 
 interface LayoutEditorModalProps {
   isOpen: boolean
@@ -257,33 +258,12 @@ function LayoutEditorContent({
 
     setSaving(true)
     try {
-      const response = await fetch('/.netlify/functions/saveLayouts', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${authToken}`,
-        },
-        body: JSON.stringify({
-          layouts: finalLayouts,
-          activeLayoutId: finalActiveId,
-        }),
-      })
-
-      if (response.status === 401) {
-        localStorage.removeItem('auth_token')
-        showToast('認証の有効期限が切れました。再度ログインしてください', 'error')
-        if (onRequireAuth) {
-          onRequireAuth()
-        }
-        return
-      }
-
-      if (!response.ok) {
-        throw new Error('設定の保存に失敗しました')
-      }
-
+      const res = await saveSeatLayouts(finalLayouts, finalActiveId, authToken)
       onLayoutsUpdated(finalLayouts, finalActiveId)
-      showToast(applyNow ? '配置パターンを保存し、適用しました' : '配置パターンを保存しました', 'success')
+      const msg = res.firestore
+        ? (applyNow ? '配置パターンをFirestoreに保存し、適用しました' : '配置パターンをFirestoreに保存しました')
+        : (applyNow ? '配置パターンを保存し、適用しました' : '配置パターンを保存しました')
+      showToast(msg, 'success')
       onClose()
     } catch (error) {
       console.error('配置パターンの保存に失敗しました:', error)
