@@ -37,6 +37,22 @@ const LOCAL_STORAGE_ACTIVE_LAYOUT_KEY = 'seat_changer_active_layout_id'
 const LOCAL_STORAGE_HISTORY_KEY = 'seat_changer_history'
 const LOCAL_STORAGE_CURRENT_SEAT_KEY = 'seat_changer_current_seat'
 const LOCAL_STORAGE_FRONT_ROW_KEY = 'seat_changer_front_row'
+const LOCAL_STORAGE_PATTERN_FRONT_ROWS_KEY = 'seat_changer_pattern_front_rows'
+
+// レイアウトオブジェクトをFirestoreおよびローカル用に安全に正規化（undefinedを徹底排除）
+export function sanitizeLayout(l: SeatLayout): SeatLayout {
+  return {
+    id: String(l.id || `layout-${Date.now()}`),
+    name: String(l.name || '無題のパターン'),
+    rows: Number(l.rows) || 6,
+    columns: Number(l.columns) || 7,
+    seats: Array.isArray(l.seats) ? l.seats.map(Boolean) : new Array(42).fill(true),
+    isDefault: Boolean(l.isDefault),
+    frontRowStudents: Array.isArray(l.frontRowStudents)
+      ? l.frontRowStudents.filter((n): n is number => typeof n === 'number' && !isNaN(n))
+      : [],
+  }
+}
 
 // --- 席替えアルゴリズム (クライアントサイド対応) ---
 function shuffleArray<T>(array: T[]): T[] {
@@ -90,7 +106,7 @@ export function performShuffle(
   }
 }
 
-// --- レイアウトデータ API ---
+// --- 座席配置パターン (Layouts) API ---
 
 export async function fetchSeatLayouts(): Promise<{
   layouts: SeatLayout[]
@@ -107,22 +123,24 @@ export async function fetchSeatLayouts(): Promise<{
         if (snap.exists()) {
           const data = snap.data()
           if (Array.isArray(data.layouts) && data.layouts.length > 0) {
+            const sanitized = data.layouts.map(sanitizeLayout)
             return {
-              layouts: data.layouts,
-              activeLayoutId: data.activeLayoutId || data.layouts[0].id,
+              layouts: sanitized,
+              activeLayoutId: data.activeLayoutId || sanitized[0].id,
               source: 'firestore',
             }
           }
         } else {
           // まだ保存されていない場合は初期値をセット
+          const sanitizedDefaults = DEFAULT_LAYOUTS.map(sanitizeLayout)
           await setDoc(layoutDocRef, {
-            layouts: DEFAULT_LAYOUTS,
-            activeLayoutId: DEFAULT_LAYOUTS[0].id,
+            layouts: sanitizedDefaults,
+            activeLayoutId: sanitizedDefaults[0].id,
             updatedAt: new Date().toISOString(),
           })
           return {
-            layouts: DEFAULT_LAYOUTS,
-            activeLayoutId: DEFAULT_LAYOUTS[0].id,
+            layouts: sanitizedDefaults,
+            activeLayoutId: sanitizedDefaults[0].id,
             source: 'firestore',
           }
         }
@@ -132,33 +150,17 @@ export async function fetchSeatLayouts(): Promise<{
     }
   }
 
-  // 2. Netlify Functions 試行
-  try {
-    const res = await fetch('/.netlify/functions/getLayouts')
-    if (res.ok) {
-      const data = await res.json()
-      if (data && Array.isArray(data.layouts) && data.layouts.length > 0) {
-        return {
-          layouts: data.layouts,
-          activeLayoutId: data.activeLayoutId || data.layouts[0].id,
-          source: 'netlify',
-        }
-      }
-    }
-  } catch {
-    // Netlify 未稼働時はローカルへ
-  }
-
-  // 3. localStorage フォールバック
+  // 2. localStorage フォールバック
   try {
     const savedLayouts = localStorage.getItem(LOCAL_STORAGE_LAYOUTS_KEY)
     const savedActiveId = localStorage.getItem(LOCAL_STORAGE_ACTIVE_LAYOUT_KEY)
     if (savedLayouts) {
       const parsed = JSON.parse(savedLayouts)
       if (Array.isArray(parsed) && parsed.length > 0) {
+        const sanitized = parsed.map(sanitizeLayout)
         return {
-          layouts: parsed,
-          activeLayoutId: savedActiveId || parsed[0].id,
+          layouts: sanitized,
+          activeLayoutId: savedActiveId || sanitized[0].id,
           source: 'local',
         }
       }
@@ -167,27 +169,30 @@ export async function fetchSeatLayouts(): Promise<{
     // ignore
   }
 
+  const defaultSanitized = DEFAULT_LAYOUTS.map(sanitizeLayout)
   return {
-    layouts: DEFAULT_LAYOUTS,
-    activeLayoutId: DEFAULT_LAYOUTS[0].id,
+    layouts: defaultSanitized,
+    activeLayoutId: defaultSanitized[0].id,
     source: 'local',
   }
 }
 
 export async function saveSeatLayouts(
   layouts: SeatLayout[],
-  activeLayoutId: string,
-  authToken?: string | null
-): Promise<{ success: boolean; firestore: boolean }> {
+  activeLayoutId: string
+): Promise<{ success: boolean; firestore: boolean; error?: string }> {
+  const sanitized = layouts.map(sanitizeLayout)
+
   // ローカル保存
   try {
-    localStorage.setItem(LOCAL_STORAGE_LAYOUTS_KEY, JSON.stringify(layouts))
+    localStorage.setItem(LOCAL_STORAGE_LAYOUTS_KEY, JSON.stringify(sanitized))
     localStorage.setItem(LOCAL_STORAGE_ACTIVE_LAYOUT_KEY, activeLayoutId)
-  } catch {
-    // ignore
+  } catch (err) {
+    console.warn('localStorage へのレイアウト保存エラー:', err)
   }
 
   let firestoreSaved = false
+  let firestoreError: string | undefined
 
   // 1. Firebase Firestore に保存
   if (isFirebaseConfigured()) {
@@ -196,34 +201,19 @@ export async function saveSeatLayouts(
       if (db) {
         const layoutDocRef = doc(db, 'settings', 'layouts')
         await setDoc(layoutDocRef, {
-          layouts,
+          layouts: sanitized,
           activeLayoutId,
           updatedAt: new Date().toISOString(),
         })
         firestoreSaved = true
       }
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('Firestore へのレイアウト保存エラー:', err)
+      firestoreError = err instanceof Error ? err.message : String(err)
     }
   }
 
-  // 2. Netlify Functions にも送信 (トークンがある場合)
-  if (authToken) {
-    try {
-      await fetch('/.netlify/functions/saveLayouts', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${authToken}`,
-        },
-        body: JSON.stringify({ layouts, activeLayoutId }),
-      })
-    } catch {
-      // ignore
-    }
-  }
-
-  return { success: true, firestore: firestoreSaved }
+  return { success: true, firestore: firestoreSaved, error: firestoreError }
 }
 
 // --- 席データ (履歴 & 現在の座席) API ---
@@ -256,20 +246,7 @@ export async function fetchSeatHistory(): Promise<HistoryEntry[]> {
     }
   }
 
-  // 2. Netlify Functions 試行
-  try {
-    const res = await fetch('/.netlify/functions/getSeatHistory')
-    if (res.ok) {
-      const data = await res.json()
-      if (Array.isArray(data)) {
-        return data
-      }
-    }
-  } catch {
-    // ignore
-  }
-
-  // 3. localStorage フォールバック
+  // 2. localStorage フォールバック
   try {
     const stored = localStorage.getItem(LOCAL_STORAGE_HISTORY_KEY)
     if (stored) {
@@ -318,11 +295,11 @@ export async function fetchCurrentSeat(): Promise<SeatEntry[] | null> {
 
 export async function saveSeatData(
   seatMap: SeatEntry[],
-  action: string = 'save',
-  authToken?: string | null
-): Promise<{ success: boolean; firestore: boolean }> {
+  action: string = 'save'
+): Promise<{ success: boolean; firestore: boolean; error?: string }> {
   const timestamp = new Date().toISOString()
   let firestoreSaved = false
+  let firestoreError: string | undefined
 
   // ローカルにキャッシュ
   try {
@@ -363,28 +340,13 @@ export async function saveSeatData(
 
         firestoreSaved = true
       }
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('Firestore への座席データ保存エラー:', err)
+      firestoreError = err instanceof Error ? err.message : String(err)
     }
   }
 
-  // 2. Netlify Functions 保存試行
-  if (authToken) {
-    try {
-      await fetch('/.netlify/functions/saveSeat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${authToken}`,
-        },
-        body: JSON.stringify({ seatMap, action }),
-      })
-    } catch {
-      // ignore
-    }
-  }
-
-  return { success: true, firestore: firestoreSaved }
+  return { success: true, firestore: firestoreSaved, error: firestoreError }
 }
 
 // --- 設定 (生徒リスト・前列固定) API ---
@@ -392,6 +354,7 @@ export async function saveSeatData(
 export async function fetchSettingsData(): Promise<{
   classmates: Classmate[]
   frontRowStudents: number[]
+  patternFrontRows: Record<string, number[]>
   source: 'firestore' | 'netlify' | 'local'
 }> {
   // 1. Firebase Firestore 試行
@@ -402,11 +365,17 @@ export async function fetchSettingsData(): Promise<{
         const snap = await getDoc(doc(db, 'settings', 'classmates_settings'))
         if (snap.exists()) {
           const data = snap.data()
+          const frontRow = Array.isArray(data.frontRowStudents) ? data.frontRowStudents : []
+          const patternMap = (data.patternFrontRows && typeof data.patternFrontRows === 'object')
+            ? data.patternFrontRows
+            : {}
+
           return {
             classmates: Array.isArray(data.classmates) && data.classmates.length > 0
               ? data.classmates
               : defaultClassmates,
-            frontRowStudents: Array.isArray(data.frontRowStudents) ? data.frontRowStudents : [],
+            frontRowStudents: frontRow,
+            patternFrontRows: patternMap,
             source: 'firestore',
           }
         } else {
@@ -414,11 +383,13 @@ export async function fetchSettingsData(): Promise<{
           await setDoc(doc(db, 'settings', 'classmates_settings'), {
             classmates: defaultClassmates,
             frontRowStudents: [],
+            patternFrontRows: {},
             updatedAt: new Date().toISOString(),
           })
           return {
             classmates: defaultClassmates,
             frontRowStudents: [],
+            patternFrontRows: {},
             source: 'firestore',
           }
         }
@@ -428,26 +399,14 @@ export async function fetchSettingsData(): Promise<{
     }
   }
 
-  // 2. Netlify Functions 試行
-  try {
-    const res = await fetch('/.netlify/functions/getSettings')
-    if (res.ok) {
-      const data = await res.json()
-      return {
-        classmates: data.classmates || defaultClassmates,
-        frontRowStudents: data.frontRowStudents || [],
-        source: 'netlify',
-      }
-    }
-  } catch {
-    // ignore
-  }
-
-  // 3. ローカルフォールバック
+  // 2. ローカルフォールバック
   let localFrontRow: number[] = []
+  let localPatternMap: Record<string, number[]> = {}
   try {
     const stored = localStorage.getItem(LOCAL_STORAGE_FRONT_ROW_KEY)
     if (stored) localFrontRow = JSON.parse(stored)
+    const storedMap = localStorage.getItem(LOCAL_STORAGE_PATTERN_FRONT_ROWS_KEY)
+    if (storedMap) localPatternMap = JSON.parse(storedMap)
   } catch {
     // ignore
   }
@@ -455,91 +414,56 @@ export async function fetchSettingsData(): Promise<{
   return {
     classmates: defaultClassmates,
     frontRowStudents: localFrontRow,
+    patternFrontRows: localPatternMap,
     source: 'local',
   }
 }
 
 export async function saveSettingsData(
   frontRowStudents: number[],
-  authToken?: string | null
-): Promise<{ success: boolean; firestore: boolean }> {
+  patternFrontRows?: Record<string, number[]>
+): Promise<{ success: boolean; firestore: boolean; error?: string }> {
+  const cleanFrontRow = Array.isArray(frontRowStudents)
+    ? frontRowStudents.filter((n): n is number => typeof n === 'number' && !isNaN(n))
+    : []
+
   // ローカル保存
   try {
-    localStorage.setItem(LOCAL_STORAGE_FRONT_ROW_KEY, JSON.stringify(frontRowStudents))
-  } catch {
-    // ignore
+    localStorage.setItem(LOCAL_STORAGE_FRONT_ROW_KEY, JSON.stringify(cleanFrontRow))
+    if (patternFrontRows) {
+      localStorage.setItem(LOCAL_STORAGE_PATTERN_FRONT_ROWS_KEY, JSON.stringify(patternFrontRows))
+    }
+  } catch (err) {
+    console.warn('localStorage への設定保存エラー:', err)
   }
 
   let firestoreSaved = false
+  let firestoreError: string | undefined
 
   // 1. Firebase Firestore 保存
   if (isFirebaseConfigured()) {
     try {
       const db = getFirebaseDb()
       if (db) {
+        const payload: Record<string, unknown> = {
+          frontRowStudents: cleanFrontRow,
+          updatedAt: new Date().toISOString(),
+        }
+        if (patternFrontRows && typeof patternFrontRows === 'object') {
+          payload.patternFrontRows = patternFrontRows
+        }
         await setDoc(
           doc(db, 'settings', 'classmates_settings'),
-          {
-            frontRowStudents,
-            updatedAt: new Date().toISOString(),
-          },
+          payload,
           { merge: true }
         )
         firestoreSaved = true
       }
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('Firestore への設定保存エラー:', err)
+      firestoreError = err instanceof Error ? err.message : String(err)
     }
   }
 
-  // 2. Netlify Functions 送信試行
-  if (authToken) {
-    try {
-      await fetch('/.netlify/functions/saveSettings', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${authToken}`,
-        },
-        body: JSON.stringify({ frontRowStudents }),
-      })
-    } catch {
-      // ignore
-    }
-  }
-
-  return { success: true, firestore: firestoreSaved }
-}
-
-// 初期データをFirestoreに一括セットアップ
-export async function seedFirestoreInitialData(): Promise<{ success: boolean; message: string }> {
-  if (!isFirebaseConfigured()) {
-    return { success: false, message: 'Firebaseが未接続です。先にConfigを設定してください。' }
-  }
-
-  const db = getFirebaseDb()
-  if (!db) {
-    return { success: false, message: 'Firestoreの初期化に失敗しています。' }
-  }
-
-  try {
-    // 1. レイアウト設定
-    await setDoc(doc(db, 'settings', 'layouts'), {
-      layouts: DEFAULT_LAYOUTS,
-      activeLayoutId: DEFAULT_LAYOUTS[0].id,
-      updatedAt: new Date().toISOString(),
-    })
-
-    // 2. 生徒・固定設定
-    await setDoc(doc(db, 'settings', 'classmates_settings'), {
-      classmates: defaultClassmates,
-      frontRowStudents: [],
-      updatedAt: new Date().toISOString(),
-    })
-
-    return { success: true, message: 'Firestoreに初期データ（座席配置パターン・生徒名簿）を正常に書き込みました！' }
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err)
-    return { success: false, message: `シード書き込み失敗: ${msg}` }
-  }
+  return { success: true, firestore: firestoreSaved, error: firestoreError }
 }

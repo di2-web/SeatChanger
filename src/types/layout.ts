@@ -25,5 +25,6 @@ export const DEFAULT_LAYOUTS: SeatLayout[] = [
       return arr;
     })(),
     isDefault: true,
+    frontRowStudents: [],
   },
 ];

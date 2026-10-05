@@ -93,9 +93,9 @@ function SeatPage() {
       const currentActive =
         layouts.find(l => l.id === activeLayoutId) || layouts[0] || DEFAULT_LAYOUTS[0]
       const frontRowStudents =
-        Array.isArray(currentActive.frontRowStudents)
+        Array.isArray(currentActive.frontRowStudents) && currentActive.frontRowStudents.length > 0
           ? currentActive.frontRowStudents
-          : (settings.frontRowStudents || [])
+          : (settings.patternFrontRows?.[currentActive.id] || settings.frontRowStudents || [])
 
       const newSeatMap = performShuffle(
         settings.classmates,

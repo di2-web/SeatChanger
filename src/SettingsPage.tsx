@@ -33,13 +33,26 @@ export default function SettingsPage() {
           setClassmates(settingsResult.classmates)
 
           if (layoutsResult.layouts && layoutsResult.layouts.length > 0) {
-            // パターンごとの frontRowStudents が未初期化の場合は全体設定から補完
-            const populatedLayouts = layoutsResult.layouts.map(l => ({
-              ...l,
-              frontRowStudents: Array.isArray(l.frontRowStudents)
-                ? l.frontRowStudents
-                : [...(settingsResult.frontRowStudents || [])],
-            }))
+            // パターンごとの frontRowStudents の復元
+            // 1. 各レイアウトに保存されている frontRowStudents
+            // 2. patternFrontRows に保存されている当該パターンの固定生徒
+            // 3. 全体設定の frontRowStudents (初期移行用)
+            const populatedLayouts = layoutsResult.layouts.map(l => {
+              let students: number[] = []
+              if (Array.isArray(l.frontRowStudents) && l.frontRowStudents.length > 0) {
+                students = l.frontRowStudents
+              } else if (settingsResult.patternFrontRows && Array.isArray(settingsResult.patternFrontRows[l.id])) {
+                students = settingsResult.patternFrontRows[l.id]
+              } else if (Array.isArray(l.frontRowStudents)) {
+                students = l.frontRowStudents
+              } else if (Array.isArray(settingsResult.frontRowStudents)) {
+                students = settingsResult.frontRowStudents
+              }
+              return {
+                ...l,
+                frontRowStudents: [...students],
+              }
+            })
 
             setLayouts(populatedLayouts)
             setActiveLayoutId(layoutsResult.activeLayoutId)
@@ -135,23 +148,51 @@ export default function SettingsPage() {
     showToast(`「${selectedLayout.name}」の固定生徒設定をすべての配置パターンに反映しました`, 'success')
   }
 
-  // 保存処理 (Firestoreの /settings/layouts にパターン情報・固定生徒をまるごと保存)
+  // 選択中のパターンを座席表に適用
+  const handleApplySelectedPattern = async () => {
+    setActiveLayoutId(selectedPatternId)
+    try {
+      const res = await saveSeatLayouts(layouts, selectedPatternId)
+      if (res.firestore) {
+        showToast(`「${selectedLayout.name}」を座席表に適用しました`, 'success')
+      } else {
+        showToast(`「${selectedLayout.name}」を適用しました`, 'info')
+      }
+    } catch (err) {
+      console.error(err)
+      showToast('適用に失敗しました', 'error')
+    }
+  }
+
+  // 保存処理 (Firestoreの /settings/layouts および /settings/classmates_settings に保存)
   const handleSave = async () => {
     setSaving(true)
     try {
-      // 1. 各レイアウトに紐付く frontRowStudents を含めて保存
+      // 1. 各レイアウトに紐付く frontRowStudents を含めて layouts を保存
       const layoutRes = await saveSeatLayouts(layouts, activeLayoutId)
 
-      // 2. 互換性のためにアクティブパターンの固定生徒を全体設定にも同期
-      const activeLayout = layouts.find(l => l.id === activeLayoutId)
-      if (activeLayout) {
-        await saveSettingsData(activeLayout.frontRowStudents || [])
+      // 2. パターン別の固定生徒マップを作成
+      const patternFrontRows: Record<string, number[]> = {}
+      for (const l of layouts) {
+        patternFrontRows[l.id] = l.frontRowStudents || []
       }
 
-      const msg = layoutRes.firestore
-        ? 'パターンごとの固定設定をFirestoreに保存しました'
-        : 'パターンごとの固定設定を保存しました'
-      showToast(msg, 'success')
+      // 3. 選択中およびアクティブパターンの固定設定を全体設定にも同期保存
+      const targetLayout = layouts.find(l => l.id === selectedPatternId) || layouts.find(l => l.id === activeLayoutId)
+      const settingsRes = await saveSettingsData(
+        targetLayout?.frontRowStudents || [],
+        patternFrontRows
+      )
+
+      if (layoutRes.firestore && settingsRes.firestore) {
+        showToast('前2列固定の設定をFirestoreに保存しました', 'success')
+      } else if (layoutRes.firestore || settingsRes.firestore) {
+        showToast('設定をFirestoreに保存しました', 'success')
+      } else if (layoutRes.error || settingsRes.error) {
+        showToast(`ローカルに保存されました (Firestore保存エラー: ${layoutRes.error || settingsRes.error})`, 'info')
+      } else {
+        showToast('前2列固定の設定を保存しました', 'success')
+      }
     } catch (error) {
       console.error('設定の保存に失敗しました:', error)
       showToast('設定の保存に失敗しました', 'error')
@@ -372,7 +413,17 @@ export default function SettingsPage() {
             </span>
           </div>
 
-          <div style={{ display: 'flex', gap: '8px' }}>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            {selectedPatternId !== activeLayoutId && (
+              <button
+                type="button"
+                className="btn btn-secondary btn-xs"
+                onClick={handleApplySelectedPattern}
+                title="この配置パターンを座席表のアクティブパターンとして適用します"
+              >
+                このパターンを座席表に適用
+              </button>
+            )}
             {layouts.length > 1 && (
               <button
                 type="button"

@@ -1,9 +1,19 @@
 import { initializeApp, getApps, type FirebaseApp } from 'firebase/app'
-import { getFirestore, type Firestore } from 'firebase/firestore'
+import { initializeFirestore, getFirestore, type Firestore } from 'firebase/firestore'
 import { firebaseConfig } from './firebaseConfig'
 
 const app: FirebaseApp = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0]
-export const db: Firestore = getFirestore(app)
+
+let firestoreInstance: Firestore
+try {
+  firestoreInstance = initializeFirestore(app, {
+    ignoreUndefinedProperties: true,
+  })
+} catch {
+  firestoreInstance = getFirestore(app)
+}
+
+export const db: Firestore = firestoreInstance
 
 export function getFirebaseDb(): Firestore {
   return db
