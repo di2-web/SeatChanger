@@ -6,8 +6,6 @@ import { saveSeatLayouts } from './services/dataService'
 interface LayoutEditorModalProps {
   isOpen: boolean
   onClose: () => void
-  authToken: string | null
-  onRequireAuth?: () => void
   activeLayoutId: string
   currentLayouts: SeatLayout[]
   onLayoutsUpdated: (layouts: SeatLayout[], newActiveId: string) => void
@@ -16,8 +14,6 @@ interface LayoutEditorModalProps {
 
 interface LayoutEditorContentProps {
   onClose: () => void
-  authToken: string | null
-  onRequireAuth?: () => void
   activeLayoutId: string
   currentLayouts: SeatLayout[]
   onLayoutsUpdated: (layouts: SeatLayout[], newActiveId: string) => void
@@ -26,8 +22,6 @@ interface LayoutEditorContentProps {
 
 function LayoutEditorContent({
   onClose,
-  authToken,
-  onRequireAuth,
   activeLayoutId,
   currentLayouts,
   onLayoutsUpdated,
@@ -248,18 +242,9 @@ function LayoutEditorContent({
 
     const finalActiveId = applyNow ? selectedLayoutId : activeLayoutId
 
-    if (!authToken) {
-      if (onRequireAuth) {
-        onRequireAuth()
-      } else {
-        showToast('保存するには管理者ログインが必要です', 'error')
-      }
-      return
-    }
-
     setSaving(true)
     try {
-      const res = await saveSeatLayouts(finalLayouts, finalActiveId, authToken)
+      const res = await saveSeatLayouts(finalLayouts, finalActiveId)
       onLayoutsUpdated(finalLayouts, finalActiveId)
       const msg = res.firestore
         ? (applyNow ? '配置パターンをFirestoreに保存し、適用しました' : '配置パターンをFirestoreに保存しました')
@@ -526,8 +511,6 @@ function LayoutEditorContent({
 export default function LayoutEditorModal({
   isOpen,
   onClose,
-  authToken,
-  onRequireAuth,
   activeLayoutId,
   currentLayouts,
   onLayoutsUpdated,
@@ -538,8 +521,6 @@ export default function LayoutEditorModal({
   return (
     <LayoutEditorContent
       onClose={onClose}
-      authToken={authToken}
-      onRequireAuth={onRequireAuth}
       activeLayoutId={activeLayoutId}
       currentLayouts={currentLayouts}
       onLayoutsUpdated={onLayoutsUpdated}

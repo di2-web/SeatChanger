@@ -10,12 +10,7 @@ import {
   type Classmate,
 } from './services/dataService'
 
-interface SettingsPageProps {
-  authToken: string | null
-  onRequireAuth: () => void
-}
-
-export default function SettingsPage({ authToken, onRequireAuth }: SettingsPageProps) {
+export default function SettingsPage() {
   const [classmates, setClassmates] = useState<Classmate[]>([])
   const [layouts, setLayouts] = useState<SeatLayout[]>(DEFAULT_LAYOUTS)
   const [activeLayoutId, setActiveLayoutId] = useState<string>(DEFAULT_LAYOUTS[0].id)
@@ -142,20 +137,15 @@ export default function SettingsPage({ authToken, onRequireAuth }: SettingsPageP
 
   // 保存処理 (Firestoreの /settings/layouts にパターン情報・固定生徒をまるごと保存)
   const handleSave = async () => {
-    if (!authToken) {
-      onRequireAuth()
-      return
-    }
-
     setSaving(true)
     try {
       // 1. 各レイアウトに紐付く frontRowStudents を含めて保存
-      const layoutRes = await saveSeatLayouts(layouts, activeLayoutId, authToken)
+      const layoutRes = await saveSeatLayouts(layouts, activeLayoutId)
 
       // 2. 互換性のためにアクティブパターンの固定生徒を全体設定にも同期
       const activeLayout = layouts.find(l => l.id === activeLayoutId)
       if (activeLayout) {
-        await saveSettingsData(activeLayout.frontRowStudents || [], authToken)
+        await saveSettingsData(activeLayout.frontRowStudents || [])
       }
 
       const msg = layoutRes.firestore
@@ -191,13 +181,7 @@ export default function SettingsPage({ authToken, onRequireAuth }: SettingsPageP
           </h2>
           <button
             className="btn btn-secondary btn-sm"
-            onClick={() => {
-              if (!authToken) {
-                onRequireAuth()
-                return
-              }
-              setShowLayoutModal(true)
-            }}
+            onClick={() => setShowLayoutModal(true)}
           >
             配置パターンを編集・作成
           </button>
@@ -447,11 +431,6 @@ export default function SettingsPage({ authToken, onRequireAuth }: SettingsPageP
       <LayoutEditorModal
         isOpen={showLayoutModal}
         onClose={() => setShowLayoutModal(false)}
-        authToken={authToken}
-        onRequireAuth={() => {
-          setShowLayoutModal(false)
-          onRequireAuth()
-        }}
         activeLayoutId={activeLayoutId}
         currentLayouts={layouts}
         onLayoutsUpdated={(updatedLayouts, newActiveId) => {

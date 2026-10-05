@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { BrowserRouter, Routes, Route, NavLink, Navigate } from 'react-router-dom'
 import SeatMapping from './SeatComponents'
-import AuthModal from './AuthModal'
 import HistoryPage from './HistoryPage'
 import SettingsPage from './SettingsPage'
 import { ToastContainer, showToast } from './Toast'
@@ -21,13 +20,7 @@ import {
 } from './services/dataService'
 import './App.css'
 
-interface SeatPageProps {
-  authToken: string | null
-  isPdfOnly: boolean
-  onAuthChange: (token: string | null, isPdfOnly?: boolean) => void
-}
-
-function SeatPage({ authToken, isPdfOnly, onAuthChange }: SeatPageProps) {
+function SeatPage() {
   const [seatMap, setSeatMap] = useState<SeatEntry[]>([])
   const [layouts, setLayouts] = useState<SeatLayout[]>(DEFAULT_LAYOUTS)
   const [activeLayoutId, setActiveLayoutId] = useState<string>(DEFAULT_LAYOUTS[0].id)
@@ -35,8 +28,6 @@ function SeatPage({ authToken, isPdfOnly, onAuthChange }: SeatPageProps) {
   const [loading, setLoading] = useState(true)
   const [shuffling, setShuffling] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [showAuthModal, setShowAuthModal] = useState(false)
-  const [pendingAction, setPendingAction] = useState<string | null>(null)
 
   // Swap mode
   const [swapMode, setSwapMode] = useState(false)
@@ -44,7 +35,7 @@ function SeatPage({ authToken, isPdfOnly, onAuthChange }: SeatPageProps) {
 
   const printAreaRef = useRef<HTMLDivElement>(null)
 
-  // 初期データ取得 (Firestore / Netlify / Local)
+  // 初期データ取得 (Firestore / Local)
   useEffect(() => {
     let ignore = false
 
@@ -89,16 +80,11 @@ function SeatPage({ authToken, isPdfOnly, onAuthChange }: SeatPageProps) {
   const handleLayoutSelect = async (newId: string) => {
     setActiveLayoutId(newId)
     try {
-      await saveSeatLayouts(layouts, newId, authToken)
+      await saveSeatLayouts(layouts, newId)
     } catch (e) {
       console.error('アクティブレイアウトの保存に失敗しました:', e)
     }
   }
-
-  const requireAuth = useCallback((action: string) => {
-    setPendingAction(action)
-    setShowAuthModal(true)
-  }, [])
 
   const doShuffle = async () => {
     setShuffling(true)
@@ -129,14 +115,14 @@ function SeatPage({ authToken, isPdfOnly, onAuthChange }: SeatPageProps) {
     }
   }
 
-  const doSave = async (token: string, currentSeatMap: SeatEntry[]) => {
+  const doSave = async (currentSeatMap: SeatEntry[]) => {
     if (currentSeatMap.length === 0) {
       showToast('保存する座席データがありません', 'error')
       return
     }
     setSaving(true)
     try {
-      const res = await saveSeatData(currentSeatMap, 'save', token)
+      const res = await saveSeatData(currentSeatMap, 'save')
       const msg = res.firestore
         ? 'Firestoreデータベースと履歴に保存しました'
         : '履歴に保存しました'
@@ -149,28 +135,14 @@ function SeatPage({ authToken, isPdfOnly, onAuthChange }: SeatPageProps) {
     }
   }
 
-  const handleAuthenticated = useCallback((token: string, isPdf?: boolean) => {
-    onAuthChange(token, isPdf)
-    setShowAuthModal(false)
-    if (pendingAction === 'shuffle') {
-      doShuffle()
-    } else if (pendingAction === 'save') {
-      doSave(token, seatMap)
-    }
-    setPendingAction(null)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingAction, seatMap, onAuthChange])
-
   const handleShuffle = () => {
     if (shuffling) return
-    if (!authToken) { requireAuth('shuffle'); return }
     doShuffle()
   }
 
   const handleSave = () => {
     if (saving) return
-    if (!authToken) { requireAuth('save'); return }
-    doSave(authToken, seatMap)
+    doSave(seatMap)
   }
 
   // Swap mode handlers
@@ -335,90 +307,55 @@ function SeatPage({ authToken, isPdfOnly, onAuthChange }: SeatPageProps) {
               )
             })}
           </select>
-          {authToken && !isPdfOnly && (
-            <button
-              className="btn btn-outline btn-sm"
-              onClick={() => setShowLayoutModal(true)}
-              title="配置パターンを編集・作成"
-            >
-              配置編集
-            </button>
-          )}
+          <button
+            className="btn btn-outline btn-sm"
+            onClick={() => setShowLayoutModal(true)}
+            title="配置パターンを編集・作成"
+          >
+            配置編集
+          </button>
         </div>
 
-        {authToken && !isPdfOnly ? (
-          // フル管理者用表示
-          <>
-            <div className="action-group">
-              <button
-                className="btn btn-primary"
-                onClick={handleShuffle}
-                disabled={shuffling}
-              >
-                {shuffling ? '処理中...' : '席替え'}
-              </button>
-              <button
-                className={`btn ${swapMode ? 'btn-secondary' : 'btn-outline'}`}
-                onClick={toggleSwapMode}
-                disabled={seatMap.length === 0}
-              >
-                {swapMode ? '交換モード終了' : '手動交換'}
-              </button>
-              <button
-                className="btn btn-outline"
-                onClick={handleSave}
-                disabled={saving || seatMap.length === 0}
-              >
-                {saving ? '保存中...' : '履歴に保存'}
-              </button>
-            </div>
-            <div className="action-group">
-              <button
-                className="btn btn-outline"
-                onClick={downloadPDF}
-                disabled={seatMap.length === 0}
-              >
-                PDF
-              </button>
-              <button
-                className="btn btn-outline"
-                onClick={shareImage}
-                disabled={seatMap.length === 0}
-              >
-                共有
-              </button>
-            </div>
-          </>
-        ) : authToken && isPdfOnly ? (
-          // export-pdf (PDF表示専用) ユーザー用表示
-          <div className="action-group">
-            <button
-              className="btn btn-outline"
-              onClick={downloadPDF}
-              disabled={seatMap.length === 0}
-            >
-              PDF
-            </button>
-            <button
-              className="btn btn-outline"
-              onClick={shareImage}
-              disabled={seatMap.length === 0}
-            >
-              共有
-            </button>
-          </div>
-        ) : (
-          // 未ログインユーザー用表示
-          <div className="action-group">
-            <button
-              className="btn btn-outline"
-              onClick={shareImage}
-              disabled={seatMap.length === 0}
-            >
-              共有
-            </button>
-          </div>
-        )}
+        {/* 席替え・手動交換・保存・出力アクション */}
+        <div className="action-group">
+          <button
+            className="btn btn-primary"
+            onClick={handleShuffle}
+            disabled={shuffling}
+          >
+            {shuffling ? '処理中...' : '席替え'}
+          </button>
+          <button
+            className={`btn ${swapMode ? 'btn-secondary' : 'btn-outline'}`}
+            onClick={toggleSwapMode}
+            disabled={seatMap.length === 0}
+          >
+            {swapMode ? '交換モード終了' : '手動交換'}
+          </button>
+          <button
+            className="btn btn-outline"
+            onClick={handleSave}
+            disabled={saving || seatMap.length === 0}
+          >
+            {saving ? '保存中...' : '履歴に保存'}
+          </button>
+        </div>
+        <div className="action-group">
+          <button
+            className="btn btn-outline"
+            onClick={downloadPDF}
+            disabled={seatMap.length === 0}
+          >
+            PDF
+          </button>
+          <button
+            className="btn btn-outline"
+            onClick={shareImage}
+            disabled={seatMap.length === 0}
+          >
+            共有
+          </button>
+        </div>
       </div>
 
       {swapMode && (
@@ -453,31 +390,13 @@ function SeatPage({ authToken, isPdfOnly, onAuthChange }: SeatPageProps) {
       ) : (
         <div className="empty-state">
           <p>まだ席替えが行われていません</p>
-          {authToken ? (
-            <p className="empty-state-sub">「席替え」ボタンを押して開始してください</p>
-          ) : (
-            <p className="empty-state-sub">管理者がログインして席替えを行うとここに表示されます</p>
-          )}
+          <p className="empty-state-sub">「席替え」ボタンを押して開始してください</p>
         </div>
       )}
-
-      <AuthModal
-        isOpen={showAuthModal}
-        onClose={() => {
-          setShowAuthModal(false)
-          setPendingAction(null)
-        }}
-        onAuthenticated={handleAuthenticated}
-      />
 
       <LayoutEditorModal
         isOpen={showLayoutModal}
         onClose={() => setShowLayoutModal(false)}
-        authToken={authToken}
-        onRequireAuth={() => {
-          onAuthChange(null)
-          requireAuth('editLayout')
-        }}
         activeLayoutId={activeLayoutId}
         currentLayouts={layouts}
         onLayoutsUpdated={(updatedLayouts, newActiveId) => {
@@ -491,40 +410,6 @@ function SeatPage({ authToken, isPdfOnly, onAuthChange }: SeatPageProps) {
 }
 
 function App() {
-  const [authToken, setAuthToken] = useState<string | null>(
-    () => localStorage.getItem('auth_token')
-  )
-  const [isPdfOnly, setIsPdfOnly] = useState<boolean>(
-    () => localStorage.getItem('is_pdf_only') === 'true'
-  )
-  const [showAuthModal, setShowAuthModal] = useState(false)
-
-  const handleAuthChange = useCallback((token: string | null, isPdf?: boolean) => {
-    setAuthToken(token)
-    const isPdfOnlyUser = !!isPdf
-    setIsPdfOnly(isPdfOnlyUser)
-    if (!token) {
-      localStorage.removeItem('auth_token')
-      localStorage.removeItem('is_pdf_only')
-    } else {
-      localStorage.setItem('is_pdf_only', isPdfOnlyUser ? 'true' : 'false')
-    }
-  }, [])
-
-  const handleLogout = () => {
-    localStorage.removeItem('auth_token')
-    localStorage.removeItem('is_pdf_only')
-    setAuthToken(null)
-    setIsPdfOnly(false)
-    showToast('ログアウトしました', 'info')
-  }
-
-  const handleHeaderAuthenticated = (token: string, isPdfOnly?: boolean) => {
-    setAuthToken(token)
-    setIsPdfOnly(!!isPdfOnly)
-    setShowAuthModal(false)
-  }
-
   return (
     <BrowserRouter>
       <header className="app-header">
@@ -533,77 +418,23 @@ function App() {
           <NavLink to="/" end className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
             座席表
           </NavLink>
-          {authToken && !isPdfOnly && (
-            <>
-              <NavLink to="/history" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
-                履歴
-              </NavLink>
-              <NavLink to="/settings" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
-                設定
-              </NavLink>
-            </>
-          )}
+          <NavLink to="/history" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
+            履歴
+          </NavLink>
+          <NavLink to="/settings" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
+            設定
+          </NavLink>
         </nav>
-        <div className="auth-status">
-          {authToken ? (
-            <button className="btn btn-ghost" onClick={handleLogout}>
-              ログアウト
-            </button>
-          ) : (
-            <button className="btn btn-ghost" onClick={() => setShowAuthModal(true)}>
-              ログイン
-            </button>
-          )}
-        </div>
       </header>
 
       <main>
         <Routes>
-          <Route
-            path="/"
-            element={
-              <SeatPage
-                authToken={authToken}
-                isPdfOnly={isPdfOnly}
-                onAuthChange={handleAuthChange}
-              />
-            }
-          />
-          <Route
-            path="/history"
-            element={
-              authToken && !isPdfOnly ? (
-                <HistoryPage
-                  authToken={authToken}
-                  onRequireAuth={() => setShowAuthModal(true)}
-                />
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/settings"
-            element={
-              authToken && !isPdfOnly ? (
-                <SettingsPage
-                  authToken={authToken}
-                  onRequireAuth={() => setShowAuthModal(true)}
-                />
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
+          <Route path="/" element={<SeatPage />} />
+          <Route path="/history" element={<HistoryPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
-
-      <AuthModal
-        isOpen={showAuthModal}
-        onClose={() => setShowAuthModal(false)}
-        onAuthenticated={handleHeaderAuthenticated}
-      />
 
       <ToastContainer />
     </BrowserRouter>

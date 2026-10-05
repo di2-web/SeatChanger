@@ -3,12 +3,7 @@ import SeatMapping from './SeatComponents'
 import { showToast } from './Toast'
 import { fetchSeatHistory, saveSeatData, type HistoryEntry } from './services/dataService'
 
-interface HistoryPageProps {
-  authToken: string | null
-  onRequireAuth: () => void
-}
-
-export default function HistoryPage({ authToken, onRequireAuth }: HistoryPageProps) {
+export default function HistoryPage() {
   const [history, setHistory] = useState<HistoryEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [expandedKey, setExpandedKey] = useState<string | null>(null)
@@ -43,14 +38,9 @@ export default function HistoryPage({ authToken, onRequireAuth }: HistoryPagePro
   }, [])
 
   const handleRestore = async (entry: HistoryEntry) => {
-    if (!authToken) {
-      onRequireAuth()
-      return
-    }
-
     setRestoringKey(entry.key)
     try {
-      const res = await saveSeatData(entry.seatMap, 'restore', authToken)
+      const res = await saveSeatData(entry.seatMap, 'restore')
       const msg = res.firestore
         ? '座席配置をFirestoreに保存・復元しました'
         : '座席配置を復元しました'
